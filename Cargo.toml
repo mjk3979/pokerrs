@@ -1,0 +1,16 @@
+[package]
+name = "pokerrs"
+version = "0.1.0"
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+serde = {version = "1.0", features = ["derive"]}
+serde_json = "1.0"
+hyper = { version = "0.14", features = ["full"] }
+tokio = { version = "1.13.0", features = ["full"] }
+rand = "0.8.4"
+async-trait = "0.1.51"
+url = "2.2.2"
+ts-rs = {git="https://github.com/mjk3979/ts-rs", version = "5.1.2", features = ["serde-compat"]}

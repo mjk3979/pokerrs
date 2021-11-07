@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Pokerrs</title>
+<link rel="stylesheet" href="styles.css">
+<body>
+<script type="module" src="client.js"></script>
+<div id="main_content" class="content">
+    <div id="name_screen" class="center">
+        <div class="vlist bigpad foreground">
+            <span class="large_label">Enter name</span>
+            <input type="text" id="name_input" class="text_input" />
+            <div class="ralign">
+                <input type="submit" id="name_submit" class="ok_button large_button" value="Join" />
+            </div>
+        </div>
+    </div>
+    <div id="game_screen" class="subcontent hidden">
+        <div class="vlist flexfill biggap">
+            <div id="player_side_top" class="player_list_top"></div>
+            <div class="player_side_container">
+                <div id="player_side_left" class="player_side"></div>
+                <div class="vlist flexfill">
+                    <div id="community_card_div" class="vlist">
+                        <span class="label">Community Cards</span>
+                        <div id="community_cards" class="card_container">
+                            <img src="card_images/200px-Cards-10-Club.svg.png" />
+                            <img src="card_images/200px-Cards-10-Diamond.svg.png" />
+                        </div>
+                    </div>
+                    <div class="centered_vlist">
+                        <input id="start_server_button" type="button" class="large_button ok_button" value="Start Server" />
+                        <span class="label">Pot</span>
+                        <span id="pot_label" class="pot_label">20 🪙</span>
+                    </div>
+                </div>
+                <div id="player_side_right" class="player_side"></div>
+            </div>
+            <div class="bottom_row_container">
+                <div id="player_div" class="vlist">
+                    <span class="label player_name">Player Name</span>
+                    <span class="label player_chips">100 🪙</span>
+                    <div class="card_container">
+                        <img src="card_images/200px-Cards-10-Club.svg.png" />
+                        <img src="card_images/200px-Cards-10-Diamond.svg.png" />
+                    </div>
+                </div>
+                <div class="lalign">
+                    <input type="button" value="Check" id="call_button" class="large_button check_button" />
+                    <input type="button" value="Fold" id="fold_button" class="large_button fold_button" />
+                    <input type="button" value="Bet" id="bet_button" class="large_button bet_button" />
+                    <input type="number" id="bet_input" class="text_input" />
+                    <input type="hidden" id="call_amount_input" />
+                    <input type="hidden" id="bet_this_round_input" />
+                </div>
+            </div>
+        </div>
+        <div class="vlist log_sidebar">
+            <div id="log_list" class="vlist flexfill foreground scrollable log_list"></div>
+            <div class="calign">
+                <span id="log_round_label" class="label">Round 1</label>
+            </div>
+            <div class="calign">
+                <input type="button" value="⬅️" id="prev_round_button" class="page_button" />
+                <input type="button" value="➡️" id="next_round_button" class="page_button" />
+            </div>
+        </div>
+    </div>
+</div>
+</body>
+</html>
