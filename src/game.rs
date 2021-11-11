@@ -50,10 +50,26 @@ pub struct PokerViewUpdate {
     pub diff: Vec<PokerLogUpdate>
 }
 
-pub trait PlayerInputSource: Send {
-    fn bet(&mut self, call_amount: Chips, min_bet: Chips, tx: oneshot::Sender<BetResp>);
-    fn replace(&mut self) -> ReplaceResp;
-    fn update(&mut self, viewstate: PokerViewUpdate);
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(TS)]
+pub struct PokerVariantDesc {
+    pub name: String
+}
+
+#[derive(Eq, Clone, PartialEq, Debug, Serialize, Deserialize)]
+#[derive(TS)]
+pub struct PokerVariants {
+    pub descs: Vec<PokerVariantDesc>,
+    #[serde(skip)]
+    pub variants: Vec<PokerVariant>,
+}
+
+#[async_trait]
+pub trait PlayerInputSource: Send + Sync {
+    async fn bet(&self, call_amount: Chips, min_bet: Chips) -> BetResp;
+    async fn replace(&self, max_can_replace: usize) -> ReplaceResp;
+    async fn dealers_choice(&self, variants: Vec<PokerVariantDesc>) -> usize;
+    fn update(&self, viewstate: PokerViewUpdate);
 }
 
 #[derive(Clone, Hash, Eq, PartialEq, Debug)]
@@ -76,7 +92,7 @@ pub type PokerVariant = Vec<Round>;
 pub struct LivePlayer {
     pub player_id: PlayerId,
     pub chips: Chips,
-    pub input: Arc<Mutex<dyn PlayerInputSource>>
+    pub input: Arc<dyn PlayerInputSource>
 }
 
 pub fn texas_hold_em() -> PokerVariant {
@@ -161,4 +177,12 @@ pub fn seven_card_stud() -> PokerVariant {
             starting_player: 1
         },
     ]
+}
+
+impl PokerVariants {
+    pub fn all() -> PokerVariants {
+        let descs = vec!["Texas Hold 'Em", "Seven Card Stud", "Five Card Stud"].iter().map(|s| PokerVariantDesc{name: s.to_string()}).collect();
+        let variants = vec![texas_hold_em(), seven_card_stud(), five_card_stud()];
+        PokerVariants { descs, variants }
+    }
 }

@@ -43,6 +43,17 @@ struct HandLog {
     log: Vec<PokerGlobalViewDiff<PlayerId>>,
 }
 
+#[derive(Clone)]
+pub enum PokerVariantState {
+    Rotation {
+        variants: PokerVariants,
+        idx: usize,
+    },
+    DealersChoice {
+        variants: PokerVariants,
+    }
+}
+
 struct TableState {
     players: HashMap<PlayerId, LivePlayer>,
     seats: BTreeMap<Seat, PlayerId>,
@@ -50,13 +61,23 @@ struct TableState {
     roles: Option<HashMap<PlayerId, PlayerRole>>,
     old_logs: Vec<HandLog>,
     current_log_start: usize,
+    variant_state: PokerVariantState
 }
 
-#[derive(Eq, Copy, Clone, PartialEq, Hash, Debug, Ord, PartialOrd, Serialize, Deserialize)]
+#[derive(Eq, Clone, PartialEq, Debug, Serialize, Deserialize)]
+#[derive(TS)]
+#[serde(tag = "kind", content="data")]
+pub enum PokerVariantSelector {
+    Rotation(PokerVariants),
+    DealersChoice(PokerVariants),
+}
+
+#[derive(Eq, Clone, PartialEq, Debug, Serialize, Deserialize)]
 #[derive(TS)]
 pub struct TableConfig {
     pub max_players: usize,
-    pub starting_chips: Chips
+    pub starting_chips: Chips,
+    pub variant_selector: PokerVariantSelector,
 }
 
 pub struct Table {
@@ -64,7 +85,6 @@ pub struct Table {
     running_rx: watch::Receiver<bool>,
     config: TableConfig,
     rules: TableRules,
-    variant: PokerVariant,
     state: Mutex<TableState>,
     spectator_tx: fold_channel::Sender<Vec<PokerGlobalViewDiff<PlayerId>>, Vec<PokerGlobalViewDiff<PlayerId>>>,
     pub spectator_rx: fold_channel::Receiver<Vec<PokerGlobalViewDiff<PlayerId>>>,
@@ -142,7 +162,6 @@ impl TableState {
 
 impl Table {
     pub fn new(config: TableConfig, rules: TableRules) -> Table {
-        let variant = texas_hold_em();
         let state = TableState {
             players: HashMap::new(),
             seats: BTreeMap::new(),
@@ -150,6 +169,7 @@ impl Table {
             roles: None,
             current_log_start: 0,
             old_logs: Vec::new(),
+            variant_state: config.variant_selector.clone().into()
         };
         let (running_tx, running_rx) = watch::channel(false);
         let (spectator_tx, spectator_rx) = fold_channel::channel(Vec::new(), |v, t: Vec<PokerGlobalViewDiff<PlayerId>>| v.extend_from_slice(&t));
@@ -159,7 +179,6 @@ impl Table {
             running_rx,
             config,
             rules,
-            variant,
             state: Mutex::new(state),
             spectator_tx,
             spectator_rx,
@@ -167,6 +186,32 @@ impl Table {
             table_view_rx
         }
     }
+
+    async fn get_next_variant(&self) -> PokerVariant {
+        let (variant_state, dealer) = {
+            let state = self.state.lock().unwrap();
+            let variant_state = state.variant_state.clone();
+            (variant_state, state.players.get(&state.next_round_roles().get(&0).unwrap().1).unwrap().clone())
+        };
+        match variant_state {
+            PokerVariantState::Rotation{variants, mut idx} => {
+                if idx > variants.descs.len() {
+                    idx = 0;
+                }
+                let retval = variants.variants.get(idx).unwrap().clone();
+                {
+                    idx += 1;
+                    let mut state = self.state.lock().unwrap();
+                    state.variant_state = PokerVariantState::Rotation{variants, idx};
+                }
+                retval
+            },
+            PokerVariantState::DealersChoice{variants} => {
+                variants.variants.get(dealer.input.dealers_choice(variants.descs).await).unwrap().clone()
+            },
+        }
+    }
+
     pub async fn next_round(&self) -> bool {
         {
             loop {
@@ -193,7 +238,7 @@ impl Table {
             let mut rng = rand::thread_rng();
             deck.shuffle(&mut rng);
         }
-        match play_poker(self.variant.clone(),
+        match play_poker(self.get_next_variant().await,
             Mutex::new(deck),
             players,
             Some(self.spectator_tx.clone()),
@@ -232,7 +277,7 @@ impl Table {
         state.logs(&cur_log, player_id, start_from)
     }
 
-    pub fn join(&self, player_id: PlayerId, player: Arc<Mutex<PlayerInputSource>>) -> Result<(), JoinError> {
+    pub fn join(&self, player_id: PlayerId, player: Arc<PlayerInputSource>) -> Result<(), JoinError> {
         let mut state = self.state.lock().unwrap();
         if state.players.len() >= self.config.max_players {
             return Err(JoinError::Full);
@@ -269,6 +314,20 @@ impl Table {
             roles: state.roles.as_ref().map(|h| h.iter().map(|(p, &r)| (r, p.clone())).collect()),
             seats: state.seats.iter().map(|(s, p)| (p.clone(), *s)).collect(),
             config: config.clone(),
+        }
+    }
+}
+
+impl From<PokerVariantSelector> for PokerVariantState {
+    fn from(selector: PokerVariantSelector) -> PokerVariantState {
+        match selector {
+            PokerVariantSelector::Rotation(variants) => PokerVariantState::Rotation {
+                variants,
+                idx: 0
+            },
+            PokerVariantSelector::DealersChoice(variants) => PokerVariantState::DealersChoice {
+                variants
+            },
         }
     }
 }

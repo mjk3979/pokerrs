@@ -118,7 +118,7 @@ impl std::fmt::Display for CardViewState {
 }
 
 pub trait PokerViewClient {
-    fn update_table(&mut self, table: TableViewState);
+    fn update_table(&self, table: TableViewState);
 }
 
 impl<P: std::fmt::Display> std::fmt::Display for PokerViewDiff<P> {

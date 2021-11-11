@@ -389,7 +389,7 @@ fn update_players<'a, 'b, 'c, 'd, 'e>(players: &'b HashMap<PlayerRole, LivePlaye
     }
     let viewdiffs: Vec<PokerGlobalViewDiff<PlayerId>> = role_viewdiffs.iter().map(|l| l.convert(ids)).collect();
     for (&role, player) in players.iter() {
-        player.input.lock().unwrap().update(PokerViewUpdate {
+        player.input.update(PokerViewUpdate {
             viewstate: PokerViewState::from_handstate_and_player(&state, role),
             diff: vec![PokerLogUpdate {
                 round,
@@ -553,9 +553,8 @@ pub async fn play_poker<'a>(variant: PokerVariant,
                         let mut this_bet = None;
                         if !player.folded && player.chips > *all_bets.get(&bet_role).unwrap_or(&0) {
                             //println!("Waiting on {}", bet_role);
-                            let (tx, rx) = oneshot::channel();
-                            players.get(&bet_role).unwrap().input.lock().unwrap().bet(last_bet_amount, min_bet, tx);
-                            match rx.await.unwrap() {
+                            let f = players.get(&bet_role).unwrap().input.bet(last_bet_amount, min_bet);
+                            match f.await {
                                 BetResp::Bet(num_chips) => {
                                     //assert!(num_chips == 0 || num_chips == last_bet_amount || num_chips >= min_bet);
                                     if last_bet.is_none() || num_chips > last_bet_amount {

@@ -12,8 +12,11 @@ use hyper::{Body, Request, Response, Client};
 use hyper::body::HttpBody;
 use hyper::service::{make_service_fn, service_fn};
 use hyper::{Method, StatusCode, Uri};
+use hyper::client::connect::Connect;
+use hyper::client::HttpConnector;
 use url::Url;
 use url::form_urlencoded::parse;
+use serde::Serialize;
 
 use std::collections::HashMap;
 use std::sync::{Mutex, Condvar, RwLock, Arc};
@@ -32,12 +35,9 @@ pub struct PokerHttpClient<P> {
 pub type PokerClientResult = Result<(), String>;
 
 impl<P: PlayerInputSource + PokerViewClient> PokerHttpClient<P> {
-    async fn bet(&mut self, min_bet: Chips, call_amount: Chips, request: &mut Request<Body>) {
+    async fn bet(&mut self, min_bet: Chips, call_amount: Chips) -> BetResp {
         let mut input_lock = self.input.lock().unwrap();
-        let (tx, rx) = oneshot::channel();
-        input_lock.bet(min_bet, call_amount, tx);
-        let resp = rx.await.unwrap();
-        *request.body_mut() = Body::from(serde_json::to_vec(&resp).unwrap());
+        input_lock.bet(min_bet, call_amount).await
     }
 
     pub async fn start(&mut self) -> PokerClientResult {
@@ -70,41 +70,45 @@ impl<P: PlayerInputSource + PokerViewClient> PokerHttpClient<P> {
             }
             if let Some(server_player) = server_player {
                 if let Some(viewstate) = server_player.viewstate {
-                    {
                         let mut input_lock = self.input.lock().unwrap();
                         input_lock.update(PokerViewUpdate{
                             viewstate,
                             diff: viewdiffs}
                         );
-                    }
+                }
 
-                    if let Some(action) = server_player.action_requested {
-                        match action {
-                            ServerActionRequest::Bet { min_bet, call_amount } => {
-                                println!("Requested bet: {} {}", min_bet, call_amount);
-                                let mut bet_req = Request::builder()
-                                    .method("POST")
-                                    .uri(Uri::builder().scheme("http")
-                                        .authority(self.address.clone())
-                                        .path_and_query(format!("/bet?player={}", self.name))
-                                        .build()
-                                        .unwrap())
-                                    .body(Body::empty())
-                                    .unwrap();
-                                self.bet(call_amount, min_bet, &mut bet_req).await;
-                                let mut bet_resp = client.request(bet_req).await.map_err(|e| e.to_string())?;
-                                if bet_resp.status() != StatusCode::OK {
-                                    let mut body: Vec<u8> = Vec::new();
-                                    while let Some(chunk) = bet_resp.body_mut().data().await {
-                                        body.extend_from_slice(&chunk.unwrap());
-                                    }
-                                    return Err(format!("Server Error on bet {}: {}", bet_resp.status(), std::str::from_utf8(&body).unwrap_or("")));
-                                }
-                            }
-                            ServerActionRequest::Replace => {
-                                panic!("unimp");
-                            }
+                if let Some(action) = server_player.action_requested {
+                    let (path, json) = match action {
+                        ServerActionRequest::Bet { min_bet, call_amount } => {
+                            println!("Requested bet: {} {}", min_bet, call_amount);
+                            let resp = self.bet(call_amount, min_bet).await;
+                            ("/bet", serde_json::to_vec(&resp).unwrap())
+                        },
+                        ServerActionRequest::Replace => {
+                            panic!("unimp");
+                        },
+                        ServerActionRequest::DealersChoice{variants} => {
+                            let mut input_lock = self.input.lock().unwrap();
+                            let resp = input_lock.dealers_choice(variants).await;
+                            ("/dealers_choice", serde_json::to_vec(&resp).unwrap())
                         }
+                    };
+                    let mut req = Request::builder()
+                        .method("POST")
+                        .uri(Uri::builder().scheme("http")
+                            .authority(self.address.clone())
+                            .path_and_query(format!("{}?player={}", path, self.name))
+                            .build()
+                            .unwrap())
+                        .body(Body::from(json))
+                        .unwrap();
+                    let mut action_resp = client.request(req).await.map_err(|e| e.to_string())?;
+                    if action_resp.status() != StatusCode::OK {
+                        let mut body: Vec<u8> = Vec::new();
+                        while let Some(chunk) = action_resp.body_mut().data().await {
+                            body.extend_from_slice(&chunk.unwrap());
+                        }
+                        return Err(format!("Server Error on action {}: {}", action_resp.status(), std::str::from_utf8(&body).unwrap_or("")));
                     }
                 }
             }

@@ -17,6 +17,8 @@ export! {
     TableConfig,
     TableViewState,
     BetDiffKind,
+    PokerVariantDesc,
+    PokerVariants,
     PokerViewDiff<PlayerId>,
     CardState,
     HandStrength,

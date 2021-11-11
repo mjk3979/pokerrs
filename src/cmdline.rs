@@ -3,29 +3,27 @@ use crate::viewstate::*;
 use crate::gamestate::*;
 
 use async_trait::async_trait;
-use tokio::sync::oneshot;
+use tokio::sync::{oneshot, watch};
 
 use std::io::{self, StdinLock, BufRead, Stdin};
 
 pub struct CmdlineInputSource {
-    state: Option<PokerViewUpdate>,
-    table: Option<TableViewState>,
+    viewstate_tx: watch::Sender<Option<PokerViewState>>,
+    viewstate_rx: watch::Receiver<Option<PokerViewState>>,
 }
 
 impl CmdlineInputSource {
     pub fn new() -> CmdlineInputSource {
-        CmdlineInputSource {
-            state: None,
-            table: None,
-        }
+        let (viewstate_tx, viewstate_rx) = watch::channel(None);
+        CmdlineInputSource { viewstate_tx, viewstate_rx }
     }
 
-    fn prompt(&mut self, prompt: &str) -> String {
+    fn prompt(&self, prompt: &str) -> String {
         print!("{}: ", prompt);
         self.read_str()
     }
 
-    fn menu<T>(&mut self, choices: &[(T, &str)]) -> T
+    fn menu<T>(&self, choices: &[(T, &str)]) -> T
         where T: Copy
     {
         let num_choices = choices.len();
@@ -41,7 +39,7 @@ impl CmdlineInputSource {
         }
     }
 
-    fn read_str(&mut self) -> String {
+    fn read_str(&self) -> String {
         let mut buf: String = "".to_string();
         match io::stdin().lock().read_line(&mut buf) {
             Ok(_) => {},
@@ -51,14 +49,14 @@ impl CmdlineInputSource {
         return buf;
     }
 
-    fn bet_amount(&mut self, min_bet: Chips, call_amount: Chips) -> Option<Chips> {
+    fn bet_amount(&self, min_bet: Chips, call_amount: Chips) -> Option<Chips> {
         let prompt = if call_amount == 0 {
             "Bet amount?".to_string()
         } else {
             format!("Raise amount (>={} or all in)?", min_bet)
         };
         if let Ok(v) = self.prompt(&prompt).parse::<Chips>() {
-            if let Some(PokerViewUpdate{viewstate: state, ..}) = self.state.as_ref() {
+            if let Some(state) = self.viewstate() {
                 if let Err(reason) = state.valid_bet(min_bet, call_amount, v, state.role) {
                     println!("{}", reason);
                 } else {
@@ -71,7 +69,7 @@ impl CmdlineInputSource {
 
     fn draw(&self) {
         let divider = "====================";
-        if let Some(PokerViewUpdate{viewstate: state, ..}) = &self.state {
+        if let Some(state) = self.viewstate() {
             println!("{}", divider);
             println!("Pot: {}", state.pot());
             println!("Chips: {}", state.bettable_chips(state.role));
@@ -80,6 +78,9 @@ impl CmdlineInputSource {
         }
     }
 
+    fn viewstate(&self) -> Option<PokerViewState> {
+        self.viewstate_rx.borrow().clone()
+    }
 }
 
 #[derive(Copy, Clone)]
@@ -89,15 +90,9 @@ enum MenuChoice {
     Fold
 }
 
-impl PokerViewClient for CmdlineInputSource {
-    fn update_table(&mut self, table: TableViewState) {
-        self.table = Some(table);
-    }
-}
-
 #[async_trait]
 impl PlayerInputSource for CmdlineInputSource {
-    fn bet(&mut self, call_amount: Chips, min_bet: Chips, tx: oneshot::Sender<BetResp>) {
+    async fn bet(&self, call_amount: Chips, min_bet: Chips) -> BetResp {
         use MenuChoice::*;
         let choices = vec![
             (CheckCall, if call_amount == 0 {
@@ -116,34 +111,41 @@ impl PlayerInputSource for CmdlineInputSource {
             self.draw();
             match self.menu(&choices) {
                 CheckCall => {
-                    tx.send(BetResp::Bet(call_amount));
-                    return;
+                    return BetResp::Bet(call_amount);
                 },
                 Fold => {
-                    tx.send(BetResp::Fold);
-                    return;
+                    return BetResp::Fold;
                 },
                 Bet => {
                     if let Some(value) = self.bet_amount(min_bet, call_amount) {
-                        tx.send(BetResp::Bet(value));
-                        return;
+                        return BetResp::Bet(value);
                     }
                 }
             }
         }
     }
 
-    fn replace(&mut self) -> ReplaceResp {
+    async fn replace(&self, max_can_replace: usize) -> ReplaceResp {
         panic!("Unimplemented!");
     }
 
-    fn update(&mut self, update: PokerViewUpdate) {
+    async fn dealers_choice(&self, variants: Vec<PokerVariantDesc>) -> usize {
+        self.menu(&variants.iter().map(|v| &v.name as &str).enumerate().collect::<Vec<_>>()[..])
+    }
+
+    fn update(&self, update: PokerViewUpdate) {
+        self.viewstate_tx.send(Some(update.viewstate));
         let divider = "----------------";
         for PokerLogUpdate{log, ..} in &update.diff {
             for d in log {
                 println!("{}\n{}\n{}", divider, d, divider);
             }
         }
-        self.state = Some(update);
+    }
+}
+
+impl PokerViewClient for CmdlineInputSource {
+    fn update_table(&self, table: TableViewState) {
+
     }
 }

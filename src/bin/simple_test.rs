@@ -22,12 +22,12 @@ async fn main() -> Result<(), PokerRoundError> {
     let mut players = vec![(0, LivePlayer {
             player_id: "player".to_string(),
             chips: 20,
-            input: Arc::new(Mutex::new(player))
+            input: Arc::new(player)
         }),
         (1, LivePlayer {
             player_id: "bot".to_string(),
             chips: 20,
-            input: Arc::new(Mutex::new(bot))
+            input: Arc::new(bot)
         })
     ].into_iter().collect();
     let table_rules = TableRules {
