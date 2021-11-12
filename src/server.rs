@@ -44,21 +44,23 @@ pub enum ServerActionRequest {
         call_amount: Chips,
         min_bet: Chips
     },
-    Replace,
+    Replace {
+        max_can_replace: usize,
+    },
     DealersChoice {
         variants: Vec<PokerVariantDesc>,
     },
 }
 
 
-#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[derive(TS)]
 pub struct ServerPlayer {
     pub viewstate: Option<PokerViewState>,
     pub action_requested: Option<ServerActionRequest>
 }
 
-#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 #[derive(TS)]
 pub struct ServerUpdate {
     pub player: Option<ServerPlayer>,
@@ -83,6 +85,8 @@ pub struct GameServerPlayerInputSource {
     action_rx: watch::Receiver<Option<ServerActionRequest>>,
     bet_tx : watch::Sender<Option<BetResp>>,
     bet_rx: watch::Receiver<Option<BetResp>>,
+    replace_tx: watch::Sender<Option<ReplaceResp>>,
+    replace_rx: watch::Receiver<Option<ReplaceResp>>,
     dealers_choice_tx: watch::Sender<usize>,
     dealers_choice_rx: watch::Receiver<usize>,
 }
@@ -92,6 +96,7 @@ impl GameServerPlayerInputSource {
         let (update_tx, update_rx) = watch::channel(None);
         let (action_tx, action_rx) = watch::channel(None);
         let (bet_tx, bet_rx) = watch::channel(None);
+        let (replace_tx, replace_rx) = watch::channel(None);
         let (dealers_choice_tx, dealers_choice_rx) = watch::channel(0);
         GameServerPlayerInputSource {
             update_tx,
@@ -100,6 +105,8 @@ impl GameServerPlayerInputSource {
             action_rx,
             bet_tx,
             bet_rx,
+            replace_tx,
+            replace_rx,
             dealers_choice_tx,
             dealers_choice_rx,
         }
@@ -132,7 +139,18 @@ impl PlayerInputSource for GameServerPlayerInputSource {
     }
 
     async fn replace(&self, max_can_replace: usize) -> ReplaceResp {
-        panic!("Unimplemented!");
+        let mut rx = self.replace_rx.clone();
+        rx.borrow_and_update();
+        self.action_tx.send(Some(ServerActionRequest::Replace {
+            max_can_replace
+        }));
+        loop {
+            rx.changed().await;
+            if let Some(retval) = rx.borrow().clone() {
+                self.action_tx.send(None);
+                return retval;
+            }
+        }
     }
 
     async fn dealers_choice(&self, variants: Vec<PokerVariantDesc>) -> usize {
@@ -171,7 +189,13 @@ impl GameServer {
             max_players: 4,
             starting_chips: 200,
             //variant_selector: PokerVariantSelector::Rotation(PokerVariants::all()),
-            variant_selector: PokerVariantSelector::DealersChoice(PokerVariants::all()),
+            //variant_selector: PokerVariantSelector::DealersChoice(PokerVariants::all()),
+            variant_selector: PokerVariantSelector::Rotation(PokerVariants {
+                descs: vec![PokerVariantDesc {
+                    name: "Five Card Draw".to_string()
+                }],
+                variants: vec![five_card_draw()]
+            }),
         };
         let static_files = StaticFiles::from_dir_path("ts/static");
         let table = Table::new(table_config, table_rules);
@@ -386,7 +410,7 @@ impl GameServer {
                             let input_source = conn;
                             let player = input_source.server_player();
                             let channel = &input_source.bet_tx;
-                            if let ServerActionRequest::Bet{call_amount, min_bet} = player.action_requested.clone().unwrap() {
+                            if let Some(ServerActionRequest::Bet{call_amount, min_bet}) = player.action_requested.clone() {
                                 match resp {
                                     BetResp::Bet(bet) => {
                                         if player.viewstate.as_ref().map(|s| s.valid_bet(min_bet, call_amount, bet, s.role).is_ok()).unwrap_or(false) {
@@ -409,6 +433,30 @@ impl GameServer {
                     if let Some(conn) = self.get_player(player_id) {
                         if let Ok(resp) = serde_json::from_slice::<usize>(&hyper::body::to_bytes(req.into_body()).await.unwrap()) {
                             conn.dealers_choice_tx.send(resp);
+                        } else {
+                            println!("Failed to parse request");
+                        }
+                    } else {
+                        println!("Failed to find player");
+                    }
+                } else {
+                    println!("No player id in request");
+                }
+            },
+            (&Method::POST, "/replace") => {
+                if let Some(player_id) = player_from_params(&params) {
+                    if let Some(player) = self.get_player(player_id) {
+                        if let Ok(resp) = serde_json::from_slice::<ReplaceResp>(&hyper::body::to_bytes(req.into_body()).await.unwrap()) {
+                            if let Some(ServerActionRequest::Replace{max_can_replace}) = player.server_player().action_requested.clone() {
+                                if resp.len() <= max_can_replace {
+                                    player.replace_tx.send(Some(resp));
+                                    *response.status_mut() = StatusCode::OK;
+                                } else {
+                                    println!("Attempting to replace too many cards {}", resp.len());
+                                }
+                            } else {
+                                println!("No action requested");
+                            }
                         } else {
                             println!("Failed to parse request");
                         }

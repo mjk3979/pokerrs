@@ -1,5 +1,6 @@
 use crate::card::*;
 use crate::viewstate::*;
+use crate::gamestate::PlayerState;
 
 use ts_rs::{TS, export};
 
@@ -29,7 +30,7 @@ pub enum BetResp {
     Fold
 }
 
-pub type ReplaceResp = Vec<Card>;
+pub type ReplaceResp = Vec<usize>;
 
 #[derive(Clone, Debug, Hash, Eq, PartialEq)]
 pub enum PlayerResp {
@@ -56,7 +57,7 @@ pub struct PokerVariantDesc {
     pub name: String
 }
 
-#[derive(Eq, Clone, PartialEq, Debug, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 #[derive(TS)]
 pub struct PokerVariants {
     pub descs: Vec<PokerVariantDesc>,
@@ -72,7 +73,7 @@ pub trait PlayerInputSource: Send + Sync {
     fn update(&self, viewstate: PokerViewUpdate);
 }
 
-#[derive(Clone, Hash, Eq, PartialEq, Debug)]
+#[derive(Clone)]
 pub enum Round {
     Ante,
     DrawToHand {
@@ -83,6 +84,9 @@ pub enum Round {
     },
     Bet {
         starting_player: PlayerRole,
+    },
+    Replace {
+        max_replace_fun: fn (&PlayerState) -> usize,
     }
 }
 
@@ -179,10 +183,38 @@ pub fn seven_card_stud() -> PokerVariant {
     ]
 }
 
+fn three_or_four_with_ace(player: &PlayerState) -> usize {
+    if player.hand.iter().any(|c| c.card.rank == 0) {
+        4
+    } else {
+        3
+    }
+}
+
+pub fn five_card_draw() -> PokerVariant {
+    use Facing::*;
+    use Round::*;
+    vec![
+        Ante,
+        DrawToHand{
+            facing: vec![FaceDown; 5]
+        },
+        Bet {
+            starting_player: 1
+        },
+        Replace {
+            max_replace_fun: three_or_four_with_ace
+        },
+        Bet {
+            starting_player: 1
+        }
+    ]
+}
+
 impl PokerVariants {
     pub fn all() -> PokerVariants {
-        let descs = vec!["Texas Hold 'Em", "Seven Card Stud", "Five Card Stud"].iter().map(|s| PokerVariantDesc{name: s.to_string()}).collect();
-        let variants = vec![texas_hold_em(), seven_card_stud(), five_card_stud()];
+        let descs = vec!["Texas Hold 'Em", "Seven Card Stud", "Five Card Stud", "Five Card Draw"].iter().map(|s| PokerVariantDesc{name: s.to_string()}).collect();
+        let variants = vec![texas_hold_em(), seven_card_stud(), five_card_stud(), five_card_draw()];
         PokerVariants { descs, variants }
     }
 }

@@ -26,7 +26,7 @@ pub enum GameState {
     End(Winners<PlayerId>)
 }
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Clone)]
 pub enum RoundState {
     Ante,
     Bet {
@@ -39,7 +39,10 @@ pub enum RoundState {
     },
     DrawToCommunity {
         quant: usize
-    }
+    },
+    Replace {
+        max_replace_fun: fn (&PlayerState) -> usize,
+    },
 }
 
 impl RoundState {
@@ -52,7 +55,10 @@ impl RoundState {
                 all_bets: HashMap::new()
             },
             Round::DrawToHand{facing} => RoundState::DrawToHand{facing: facing.clone()},
-            Round::DrawToCommunity{quant} => RoundState::DrawToCommunity{quant: *quant}
+            Round::DrawToCommunity{quant} => RoundState::DrawToCommunity{quant: *quant},
+            Round::Replace{max_replace_fun} => RoundState::Replace {
+                max_replace_fun: *max_replace_fun
+            },
         }
     }
 }
@@ -576,6 +582,35 @@ pub async fn play_poker<'a>(variant: PokerVariant,
                             last_bet: this_bet.or(last_bet),
                             all_bets
                         });
+                    },
+                    Replace{max_replace_fun} => {
+                        state.cur_round = None;
+                        let dealer = 0;
+                        let mut role = dealer;
+                        loop {
+                            role = next_player(role, num_players);
+                            let player = state.players.get(&role).unwrap();
+                            if !player.folded {
+                                let resp = players.get(&role).unwrap().input.replace(max_replace_fun(player)).await;
+                                let mut player = state.players.get_mut(&role).unwrap();
+                                let mut discard = Vec::new();
+                                let mut drawn = Vec::new();
+                                for idx in resp {
+                                    let old_card = player.hand[idx].clone();
+                                    discard.push(old_card);
+                                    player.hand[idx].card = state.deck.lock().unwrap().draw()?;
+                                    drawn.push(player.hand[idx].clone());
+                                }
+                                viewdiffs.push(PokerGlobalViewDiff::Replace {
+                                    player: role,
+                                    discard,
+                                    drawn
+                                });
+                            }
+                            if role == dealer {
+                                break;
+                            }
+                        }
                     }
                 }
             }

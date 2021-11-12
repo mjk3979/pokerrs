@@ -90,6 +90,12 @@ enum MenuChoice {
     Fold
 }
 
+#[derive(Copy, Clone, Eq, PartialEq)]
+enum ReplaceChoice {
+    Toggle(usize),
+    Submit,
+}
+
 #[async_trait]
 impl PlayerInputSource for CmdlineInputSource {
     async fn bet(&self, call_amount: Chips, min_bet: Chips) -> BetResp {
@@ -126,7 +132,26 @@ impl PlayerInputSource for CmdlineInputSource {
     }
 
     async fn replace(&self, max_can_replace: usize) -> ReplaceResp {
-        panic!("Unimplemented!");
+        use ReplaceChoice::*;
+        let viewstate = self.viewstate().unwrap();
+        let hand = &viewstate.players.get(&viewstate.role).unwrap().hand;
+        let mut selected: Vec<(CardViewState, bool)> = hand.iter().map(|c| (c.clone(), false)).collect();
+        loop {
+            let mut choices: Vec<(ReplaceChoice, String)> = selected.iter().enumerate().map(|(idx, (c, s))| (Toggle(idx), format!("{}{}", c, if *s {"*"} else {""}))).collect();
+            let num_selected = selected.iter().filter(|(_, s)| *s).count();
+            choices.push((Submit, format!("Replace {} cards", num_selected)));
+            match self.menu(&choices.iter().map(|(rc, s)| (rc, s as &str)).collect::<Vec<_>>()) {
+                Toggle(idx) => {
+                    let idx: usize = *idx;
+                    if selected[idx].1 || num_selected < max_can_replace {
+                        selected[idx].1 = !selected[idx].1;
+                    }
+                },
+                Submit => {
+                    return selected.into_iter().enumerate().filter_map(|(idx, (_, s))| if s {Some(idx)} else {None}).collect();
+                }
+            }
+        }
     }
 
     async fn dealers_choice(&self, variants: Vec<PokerVariantDesc>) -> usize {

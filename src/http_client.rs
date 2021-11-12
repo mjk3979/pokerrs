@@ -84,8 +84,10 @@ impl<P: PlayerInputSource + PokerViewClient> PokerHttpClient<P> {
                             let resp = self.bet(call_amount, min_bet).await;
                             ("/bet", serde_json::to_vec(&resp).unwrap())
                         },
-                        ServerActionRequest::Replace => {
-                            panic!("unimp");
+                        ServerActionRequest::Replace{max_can_replace} => {
+                            let mut input_lock = self.input.lock().unwrap();
+                            let resp = input_lock.replace(max_can_replace).await;
+                            ("/replace", serde_json::to_vec(&resp).unwrap())
                         },
                         ServerActionRequest::DealersChoice{variants} => {
                             let mut input_lock = self.input.lock().unwrap();

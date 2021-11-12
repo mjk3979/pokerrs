@@ -64,7 +64,7 @@ struct TableState {
     variant_state: PokerVariantState
 }
 
-#[derive(Eq, Clone, PartialEq, Debug, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 #[derive(TS)]
 #[serde(tag = "kind", content="data")]
 pub enum PokerVariantSelector {
@@ -72,7 +72,7 @@ pub enum PokerVariantSelector {
     DealersChoice(PokerVariants),
 }
 
-#[derive(Eq, Clone, PartialEq, Debug, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 #[derive(TS)]
 pub struct TableConfig {
     pub max_players: usize,

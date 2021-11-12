@@ -48,7 +48,7 @@ pub struct PokerViewState {
     pub bet_this_round: HashMap<PlayerRole, Chips>
 }
 
-#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 #[derive(TS)]
 pub struct TableViewState {
     pub running: bool,
@@ -146,8 +146,13 @@ impl<P: std::fmt::Display> std::fmt::Display for PokerViewDiff<P> {
                     Raise{diff_from_last_raise, ..} => { write!(f, "raised {}", diff_from_last_raise)?; }
                 }
             }
-            Replace{..} => {
-                panic!("TODO");
+            Replace{player, drawn, discard} => {
+                assert!(drawn.len() == discard.len());
+                if !drawn.is_empty() && drawn.iter().all(|cvs| if let CardViewState::Visible(_) = cvs {true} else {false}) {
+                    write!(f, "{} replaced {} with {}", player, PokerViewState::format_cards(discard), PokerViewState::format_cards(drawn));
+                } else {
+                    write!(f, "{} replaced {} cards", player, drawn.len());
+                }
             },
             ShowCards{player, shown, strength} => {
                 write!(f, "{} shows {} to give them a {}", player, shown.iter().map(|(_, cvs)| cvs.to_string()).collect::<Vec<String>>().join(", "), strength)?;
