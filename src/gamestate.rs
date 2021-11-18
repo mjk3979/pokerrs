@@ -86,7 +86,7 @@ pub struct HandState {
     pub rounds: Vec<Round>,
     pub cur_round: Option<RoundState>,
     pub players: HashMap<PlayerRole, PlayerState>,
-    pub community_cards: Vec<Card>
+    pub community_cards: CardTuple,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, PartialOrd, Ord, Serialize, Deserialize)]
@@ -323,11 +323,11 @@ fn calc_winners(state: &HandState) -> Winners<PlayerRole> {
             return None;
         }
         Some((role, {
-            let mut all_cards = state.community_cards.clone();
+            let mut all_cards = state.community_cards;
             for &cs in player.hand.iter() {
                 all_cards.push(cs.card);
             }
-            best_hand(all_cards.into_iter().collect(), 5)
+            best_hand(all_cards, 5)
         }))
 
     }).collect();
@@ -413,7 +413,7 @@ fn update_players<'a, 'b, 'c, 'd, 'e>(players: &'b HashMap<PlayerRole, LivePlaye
     }
 }
 
-pub fn show_cards(players: &mut HashMap<PlayerRole, PlayerState>, viewdiffs: &mut Vec<PokerGlobalViewDiff<PlayerRole>>, last_bet: Option<PlayerRole>, community_cards: &[Card]) {
+pub fn show_cards(players: &mut HashMap<PlayerRole, PlayerState>, viewdiffs: &mut Vec<PokerGlobalViewDiff<PlayerRole>>, last_bet: Option<PlayerRole>, community_cards: CardTuple) {
     // last best and then to the left
     let starting = last_bet.unwrap_or(0); // todo who actually goes first?
     let num_players = players.len();
@@ -428,11 +428,11 @@ pub fn show_cards(players: &mut HashMap<PlayerRole, PlayerState>, viewdiffs: &mu
             }
         }
         if !shown.is_empty() {
-            let mut all_cards: Vec<_> = community_cards.iter().cloned().collect();
+            let mut all_cards = community_cards;
             for &cs in player.hand.iter() {
                 all_cards.push(cs.card);
             }
-            let strength = best_hand(all_cards.into_iter().collect(), 5);
+            let strength = best_hand(all_cards, 5);
             viewdiffs.push(PokerGlobalViewDiff::Common(PokerViewDiff::ShowCards {
                 player: role,
                 shown,
@@ -460,7 +460,7 @@ pub async fn play_poker<'a>(variant: PokerVariant,
         rounds: variant.iter().cloned().rev().collect(),
         cur_round: None,
         players: players.iter().map(|(&e, p)| (e, PlayerState{chips: p.chips, hand: Vec::new(), folded: false, total_bet: 0})).collect(),
-        community_cards: Vec::new()
+        community_cards: CardTuple::new(),
     };
 
     let num_players = players.len();
@@ -477,7 +477,7 @@ pub async fn play_poker<'a>(variant: PokerVariant,
                 if let Some(next_round) = state.rounds.pop() {
                     state.cur_round = Some(RoundState::new(&next_round));
                 } else {
-                    show_cards(&mut state.players, &mut viewdiffs, hand_last_bet, &state.community_cards);
+                    show_cards(&mut state.players, &mut viewdiffs, hand_last_bet, state.community_cards);
                     update_players(&players, &ids, &spectator_channel, &state, &viewdiffs, round);
                     viewdiffs.clear();
                     let winners = calc_winners(&state);
@@ -852,7 +852,7 @@ mod test {
             rounds: Vec::new(),
             cur_round: None,
             players,
-            community_cards: Vec::new()
+            community_cards: CardTuple::new(),
         }
     }
 

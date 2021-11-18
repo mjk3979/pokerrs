@@ -293,7 +293,7 @@ impl PokerViewState {
                     CardViewState::from_card_state_and_same_player(card_state, role == player)).collect()
             })
         }).collect();
-        let community_cards = state.community_cards.iter().map(|&c| Visible(CardState{
+        let community_cards = state.community_cards.iter().map(|c| Visible(CardState{
             card: c,
             facing: FaceUp
         })).collect();
