@@ -6,6 +6,7 @@ pub mod fold_channel;
 pub mod static_files;
 //pub mod owning_broadcast;
 pub mod card;
+pub mod bitcard;
 //mod hand;
 pub mod game;
 pub mod gamestate;

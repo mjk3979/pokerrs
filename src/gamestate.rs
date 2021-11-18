@@ -4,6 +4,7 @@ use crate::table::*;
 use crate::comb::*;
 use crate::viewstate::*;
 use crate::fold_channel;
+use crate::bitcard::*;
 
 use tokio::sync::broadcast;
 use tokio::sync::oneshot;
@@ -88,78 +89,81 @@ pub struct HandState {
     pub community_cards: Vec<Card>
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, PartialOrd, Ord, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, PartialOrd, Ord, Serialize, Deserialize)]
 #[derive(TS)]
 pub struct HandStrength {
     pub kind: Kind,
-    pub kickers: Vec<StrengthRank>
+    pub kickers: RankTuple,
 }
 
 impl HandStrength {
-    fn new(cards: [Card; 5]) -> Self {
+    fn new(cards: CardTuple, hand_size: usize) -> Self {
         // Reorganize to make calculating easy
-        let mut ranks: Vec<usize> = cards.iter().map(|c| c.rank).collect();
+        let mut ranks: RankTuple = cards.into();
         ranks.sort();
-        let is_straight = (1..5).all(|i| ranks[0] + i == ranks[i]);
-        let is_flush = (1..5).all(|i| cards[0].suit == cards[i].suit);
+        let is_straight = (1..hand_size).all(|i| ranks.get(0) + i == ranks.get(i));
+        let is_flush = (1..hand_size).all(|i| cards.get(0).suit == cards.get(i).suit);
 
-        let mut by_rank: Vec<usize> = vec![0; NUM_RANKS+1];
-        for &rank in ranks.iter() {
+        let mut by_rank: [u8; NUM_RANKS+1] = [0; NUM_RANKS+1];
+        for rank in ranks.iter() {
             by_rank[rank] += 1;
         }
-        let mut by_amount: Vec<Vec<usize>> = vec![Vec::new(); NUM_SUITS];
+        let mut by_amount: [RankTuple; NUM_SUITS] = [RankTuple::new(); NUM_SUITS];
         for (rank, &amount) in by_rank.iter().enumerate() {
             if amount > 0 {
-                by_amount[amount-1].push(rank);
+                by_amount[(amount-1) as usize].push(rank);
             }
         }
+        //println!("{:?}", ranks);
+        //println!("{:?}", by_rank);
+        //println!("{:?}", by_amount);
         
         // Go through cases best-to-worst
         use Kind::*;
         if is_straight && is_flush {
             return HandStrength {
-                kind: StraightFlush(*ranks.last().unwrap()),
-                kickers: Vec::new()
+                kind: StraightFlush(ranks.last().unwrap()),
+                kickers: RankTuple::new(),
             };
         }
-        if let Some(&four_kind_rank) = by_amount[3].first() {
+        if let Some(four_kind_rank) = by_amount[3].first() {
             return HandStrength {
                 kind: FourKind(four_kind_rank),
-                kickers: by_amount[0].clone()
+                kickers: by_amount[0]
             };
         }
-        if let Some(&children) = by_amount[2].first() {
-            if let Some(&parents) = by_amount[1].first() {
+        if let Some(children) = by_amount[2].first() {
+            if let Some(parents) = by_amount[1].first() {
                 return HandStrength {
                     kind: FullHouse{
                         high: children,
                         low: parents,
                     },
-                    kickers: Vec::new()
+                    kickers: RankTuple::new()
                 };
             }
         }
         if is_flush {
             return HandStrength {
-                kind: Flush(ranks.into_iter().rev().collect::<Vec<_>>().try_into().unwrap()),
-                kickers: Vec::new()
+                kind: Flush(ranks.iter().rev().collect()),
+                kickers: RankTuple::new()
             };
         }
         if is_straight {
             return HandStrength {
-                kind: Straight(*ranks.last().unwrap()),
-                kickers: Vec::new()
+                kind: Straight(ranks.last().unwrap()),
+                kickers: RankTuple::new()
             };
         }
-        let kickers = by_amount[0].iter().copied().rev().collect();
-        if let Some(&three_kind_rank) = by_amount[2].first() {
+        let kickers = by_amount[0].iter().rev().collect();
+        if let Some(three_kind_rank) = by_amount[2].first() {
             return HandStrength {
                 kind: ThreeKind(three_kind_rank),
                 kickers
             }
         }
-        if let Some(&low_pair) = by_amount[1].first() {
-            if let Some(&high_pair) = by_amount[1].iter().nth(1) {
+        if let Some(low_pair) = by_amount[1].first() {
+            if let Some(high_pair) = by_amount[1].iter().nth(1) {
                 return HandStrength {
                     kind: TwoPair{
                         high: high_pair,
@@ -175,8 +179,8 @@ impl HandStrength {
             }
         }
         return HandStrength {
-            kind: HighCard(*ranks.last().unwrap()),
-            kickers: (&ranks[0..4]).iter().rev().copied().collect()
+            kind: HighCard(ranks.last().unwrap()),
+            kickers: ranks.iter().take(hand_size-1).rev().collect()
         };
     }
 }
@@ -187,10 +191,9 @@ impl std::fmt::Display for HandStrength {
     }
 }
 
-fn explode_aces(cards: &[Card]) -> Vec<Card> {
-    let mut retval = Vec::new();
-    for &card in cards {
-        retval.push(card);
+fn explode_aces(cards: CardTuple) -> CardTuple {
+    let mut retval = cards;
+    for card in cards.iter() {
         if card.rank == 0 {
             retval.push(Card {
                 rank: NUM_RANKS,
@@ -201,22 +204,22 @@ fn explode_aces(cards: &[Card]) -> Vec<Card> {
     retval
 }
 
-pub fn best_hand(cards: &[Card]) -> HandStrength {
+pub fn best_hand(cards: CardTuple, hand_size: usize) -> HandStrength {
     let all_cards = explode_aces(cards);
-    let real_ace_count = all_cards.len() - cards.len();
-    combinations(&all_cards, 5).into_iter().filter_map(|v|{
-        let combo = v.into_iter().copied().collect::<Vec<_>>();
-        let mut ace_count = 0;
-        for &card in &combo {
+    combinations(all_cards.iter(), hand_size).into_iter().filter_map(|v|{
+        let combo: CardTuple = v.into_iter().collect();
+        let mut ace_suits: u8 = 0;
+        for card in combo.iter() {
             if card.rank == 0 || card.rank == NUM_RANKS {
-                ace_count += 1;
+                let Suit(suit) = card.suit;
+                if (ace_suits & (1 << suit)) != 0 {
+                    return None;
+                } else {
+                    ace_suits |= (1 << suit);
+                }
             }
         }
-        if ace_count > real_ace_count {
-            None
-        } else {
-            Some(HandStrength::new(combo.try_into().unwrap()))
-        }
+        Some(HandStrength::new(combo, hand_size))
     }).max().unwrap()
 }
 
@@ -324,7 +327,7 @@ fn calc_winners(state: &HandState) -> Winners<PlayerRole> {
             for &cs in player.hand.iter() {
                 all_cards.push(cs.card);
             }
-            best_hand(&all_cards)
+            best_hand(all_cards.into_iter().collect(), 5)
         }))
 
     }).collect();
@@ -429,7 +432,7 @@ pub fn show_cards(players: &mut HashMap<PlayerRole, PlayerState>, viewdiffs: &mu
             for &cs in player.hand.iter() {
                 all_cards.push(cs.card);
             }
-            let strength = best_hand(&all_cards);
+            let strength = best_hand(all_cards.into_iter().collect(), 5);
             viewdiffs.push(PokerGlobalViewDiff::Common(PokerViewDiff::ShowCards {
                 player: role,
                 shown,
@@ -625,220 +628,220 @@ mod test {
 
     #[test]
     fn test_explode_aces_do_nothing() {
-        let cards: Vec<Card> = vec![1, 2, 3, NUM_RANKS-1, 9].into_iter().map(|rank| Card{rank, suit: Suit(0)}).collect();
-        let result = explode_aces(&cards);
+        let cards: CardTuple = vec![1, 2, 3, NUM_RANKS-1, 9].into_iter().map(|rank| Card{rank, suit: Suit(0)}).collect();
+        let result = explode_aces(cards);
         assert!(result == cards, format!("{:?} != {:?}", result, cards));
     }
 
     #[test]
     fn test_explode_aces_single_ace() {
-        let cards: Vec<Card> = vec![1, 0, 3, NUM_RANKS-1, 9].into_iter().map(|rank| Card{rank, suit: Suit(0)}).collect();
+        let cards: CardTuple = vec![1, 0, 3, NUM_RANKS-1, 9].into_iter().map(|rank| Card{rank, suit: Suit(0)}).collect();
         let mut expected = cards.clone();
-        expected.insert(2, Card {
+        expected.push(Card {
             rank:NUM_RANKS,
             suit: Suit(0)
         });
-        let result = explode_aces(&cards);
+        let result = explode_aces(cards);
         assert!(result == expected, format!("{:?} != {:?}", result, expected));
     }
 
     #[test]
     fn test_explode_aces_single_ace_first() {
-        let cards: Vec<Card> = vec![0, 1, 3, NUM_RANKS-1, 9].into_iter().map(|rank| Card{rank, suit: Suit(0)}).collect();
+        let cards: CardTuple = vec![0, 1, 3, NUM_RANKS-1, 9].into_iter().map(|rank| Card{rank, suit: Suit(0)}).collect();
         let mut expected = cards.clone();
-        expected.insert(1, Card {
+        expected.push(Card {
             rank:NUM_RANKS,
             suit: Suit(0)
         });
-        let result = explode_aces(&cards);
+        let result = explode_aces(cards);
         assert!(result == expected, format!("{:?} != {:?}", result, expected));
     }
 
     #[test]
     fn test_explode_aces_single_ace_last() {
-        let cards: Vec<Card> = vec![2, 1, 3, NUM_RANKS-1, 0].into_iter().map(|rank| Card{rank, suit: Suit(0)}).collect();
+        let cards: CardTuple = vec![2, 1, 3, NUM_RANKS-1, 0].into_iter().map(|rank| Card{rank, suit: Suit(0)}).collect();
         let mut expected = cards.clone();
-        expected.insert(5, Card {
+        expected.push(Card {
             rank:NUM_RANKS,
             suit: Suit(0)
         });
-        let result = explode_aces(&cards);
+        let result = explode_aces(cards);
         assert!(result == expected, format!("{:?} != {:?}", result, expected));
     }
 
     #[test]
     fn test_explode_aces_two_aces() {
-        let cards: Vec<Card> = vec![0, 1, 0, NUM_RANKS-1, 7].into_iter().map(|rank| Card{rank, suit: Suit(0)}).collect();
+        let cards: CardTuple = vec![0, 1, 0, NUM_RANKS-1, 7].into_iter().map(|rank| Card{rank, suit: Suit(0)}).collect();
         let mut expected = cards.clone();
-        expected.insert(3, Card {
+        expected.push(Card {
             rank:NUM_RANKS,
             suit: Suit(0)
         });
-        expected.insert(1, Card {
+        expected.push(Card {
             rank:NUM_RANKS,
             suit: Suit(0)
         });
-        let result = explode_aces(&cards);
+        let result = explode_aces(cards);
         assert!(result == expected, format!("{:?} != {:?}", result, expected));
     }
 
     #[test]
     fn test_explode_aces_two_aces_adjacent() {
-        let cards: Vec<Card> = vec![0, 0, 2, NUM_RANKS-1, 7].into_iter().map(|rank| Card{rank, suit: Suit(0)}).collect();
+        let cards: CardTuple = vec![0, 0, 2, NUM_RANKS-1, 7].into_iter().map(|rank| Card{rank, suit: Suit(0)}).collect();
         let mut expected = cards.clone();
-        expected.insert(2, Card {
+        expected.push(Card {
             rank:NUM_RANKS,
             suit: Suit(0)
         });
-        expected.insert(1, Card {
+        expected.push(Card {
             rank:NUM_RANKS,
             suit: Suit(0)
         });
-        let result = explode_aces(&cards);
+        let result = explode_aces(cards);
         assert!(result == expected, format!("{:?} != {:?}", result, expected));
     }
 
     #[test]
     fn test_explode_aces_four_aces() {
-        let cards: Vec<Card> = vec![0, 0, 0, NUM_RANKS-1, 0].into_iter().map(|rank| Card{rank, suit: Suit(0)}).collect();
+        let cards: CardTuple = vec![0, 0, 0, NUM_RANKS-1, 0].into_iter().map(|rank| Card{rank, suit: Suit(0)}).collect();
         let mut expected = cards.clone();
-        expected.insert(5, Card {
+        expected.push(Card {
             rank:NUM_RANKS,
             suit: Suit(0)
         });
-        expected.insert(3, Card {
+        expected.push(Card {
             rank:NUM_RANKS,
             suit: Suit(0)
         });
-        expected.insert(2, Card {
+        expected.push(Card {
             rank:NUM_RANKS,
             suit: Suit(0)
         });
-        expected.insert(1, Card {
+        expected.push(Card {
             rank:NUM_RANKS,
             suit: Suit(0)
         });
-        let result = explode_aces(&cards);
+        let result = explode_aces(cards);
         assert!(result == expected, format!("{:?} != {:?}", result, expected));
     }
 
     #[test]
     fn test_best_hand_high_card() {
-        let cards: Vec<Card> = vec![4, 2, 7, 5, 9].into_iter().enumerate().map(|(i, rank)| Card{rank, suit: Suit(i%4)}).collect();
-        let result = best_hand(&cards);
+        let cards: CardTuple = vec![4, 2, 7, 5, 9].into_iter().enumerate().map(|(i, rank)| Card{rank, suit: Suit(i%4)}).collect();
+        let result = best_hand(cards, 5);
         let expected = HandStrength{
             kind: Kind::HighCard(9),
-            kickers: vec![7, 5, 4, 2]
+            kickers: vec![7, 5, 4, 2].into()
         };
         assert!(result == expected, format!("{:?} != {:?}", result, expected));
     }
     
     #[test]
     fn test_best_hand_high_card_ace() {
-        let cards: Vec<Card> = vec![4, 2, 0, 5, 9].into_iter().enumerate().map(|(i, rank)| Card{rank, suit: Suit(i%4)}).collect();
-        let result = best_hand(&cards);
+        let cards: CardTuple = vec![4, 2, 0, 5, 9].into_iter().enumerate().map(|(i, rank)| Card{rank, suit: Suit(i%4)}).collect();
+        let result = best_hand(cards, 5);
         let expected = HandStrength{
             kind: Kind::HighCard(NUM_RANKS),
-            kickers: vec![9, 5, 4, 2]
+            kickers: vec![9, 5, 4, 2].into()
         };
         assert!(result == expected, format!("{:?} != {:?}", result, expected));
     }
 
     #[test]
     fn test_best_hand_pair() {
-        let cards: Vec<Card> = vec![4, 2, 1, 4, 9].into_iter().enumerate().map(|(i, rank)| Card{rank, suit: Suit(i%4)}).collect();
-        let result = best_hand(&cards);
+        let cards: CardTuple = vec![4, 2, 1, 4, 9].into_iter().enumerate().map(|(i, rank)| Card{rank, suit: Suit(i%4)}).collect();
+        let result = best_hand(cards, 5);
         let expected = HandStrength{
             kind: Kind::Pair(4),
-            kickers: vec![9, 2, 1]
+            kickers: vec![9, 2, 1].into()
         };
         assert!(result == expected, format!("{:?} != {:?}", result, expected));
     }
 
     #[test]
     fn test_best_hand_pair_ace_not_in_pair() {
-        let cards: Vec<Card> = vec![4, 0, 1, 4, 9].into_iter().enumerate().map(|(i, rank)| Card{rank, suit: Suit(i%4)}).collect();
-        let result = best_hand(&cards);
+        let cards: CardTuple = vec![4, 0, 1, 4, 9].into_iter().enumerate().map(|(i, rank)| Card{rank, suit: Suit(i%4)}).collect();
+        let result = best_hand(cards, 5);
         let expected = HandStrength{
             kind: Kind::Pair(4),
-            kickers: vec![NUM_RANKS, 9, 1]
+            kickers: vec![NUM_RANKS, 9, 1].into()
         };
         assert!(result == expected, format!("{:?} != {:?}", result, expected));
     }
 
     #[test]
     fn test_best_hand_pair_ace_in_pair() {
-        let cards: Vec<Card> = vec![0, 2, 1, 4, 0].into_iter().enumerate().map(|(i, rank)| Card{rank, suit: Suit(i%4)}).collect();
-        let result = best_hand(&cards);
+        let cards: CardTuple = vec![0, 2, 1, 0, 4].into_iter().enumerate().map(|(i, rank)| Card{rank, suit: Suit(i%4)}).collect();
+        let result = best_hand(cards, 5);
         let expected = HandStrength{
             kind: Kind::Pair(NUM_RANKS),
-            kickers: vec![4, 2, 1]
+            kickers: vec![4, 2, 1].into()
         };
         assert!(result == expected, format!("{:?} != {:?}", result, expected));
     }
 
     #[test]
     fn test_best_hand_two_pair() {
-        let cards: Vec<Card> = vec![4, 2, 1, 4, 2].into_iter().enumerate().map(|(i, rank)| Card{rank, suit: Suit(i%4)}).collect();
-        let result = best_hand(&cards);
+        let cards: CardTuple = vec![4, 2, 1, 4, 2].into_iter().enumerate().map(|(i, rank)| Card{rank, suit: Suit(i%4)}).collect();
+        let result = best_hand(cards, 5);
         let expected = HandStrength{
             kind: Kind::TwoPair{high: 4, low: 2},
-            kickers: vec![1]
+            kickers: vec![1].into()
         };
         assert!(result == expected, format!("{:?} != {:?}", result, expected));
     }
 
     #[test]
     fn test_best_hand_two_pair_ace_not_in_two_pair() {
-        let cards: Vec<Card> = vec![4, 2, 0, 4, 2].into_iter().enumerate().map(|(i, rank)| Card{rank, suit: Suit(i%4)}).collect();
-        let result = best_hand(&cards);
+        let cards: CardTuple = vec![4, 2, 0, 4, 2].into_iter().enumerate().map(|(i, rank)| Card{rank, suit: Suit(i%4)}).collect();
+        let result = best_hand(cards, 5);
         let expected = HandStrength{
             kind: Kind::TwoPair{high: 4, low: 2},
-            kickers: vec![NUM_RANKS]
+            kickers: vec![NUM_RANKS].into()
         };
         assert!(result == expected, format!("{:?} != {:?}", result, expected));
     }
 
     #[test]
     fn test_best_hand_two_pair_ace_in_two_pair() {
-        let cards: Vec<Card> = vec![4, 0, 1, 4, 0].into_iter().enumerate().map(|(i, rank)| Card{rank, suit: Suit(i%4)}).collect();
-        let result = best_hand(&cards);
+        let cards: CardTuple = vec![4, 0, 1, 4, 0].into_iter().enumerate().map(|(i, rank)| Card{rank, suit: Suit(i%4)}).collect();
+        let result = best_hand(cards, 5);
         let expected = HandStrength{
             kind: Kind::TwoPair{high: NUM_RANKS, low: 4},
-            kickers: vec![1]
+            kickers: vec![1].into()
         };
         assert!(result == expected, format!("{:?} != {:?}", result, expected));
     }
 
     #[test]
     fn test_best_hand_three_kind() {
-        let cards: Vec<Card> = vec![4, 4, 1, 4, 2].into_iter().enumerate().map(|(i, rank)| Card{rank, suit: Suit(i%4)}).collect();
-        let result = best_hand(&cards);
+        let cards: CardTuple = vec![4, 4, 1, 4, 2].into_iter().enumerate().map(|(i, rank)| Card{rank, suit: Suit(i%4)}).collect();
+        let result = best_hand(cards, 5);
         let expected = HandStrength{
             kind: Kind::ThreeKind(4),
-            kickers: vec![2, 1]
+            kickers: vec![2, 1].into()
         };
         assert!(result == expected, format!("{:?} != {:?}", result, expected));
     }
 
     #[test]
     fn test_best_hand_three_kind_ace_not_in_three_kind() {
-        let cards: Vec<Card> = vec![4, 4, 0, 4, 2].into_iter().enumerate().map(|(i, rank)| Card{rank, suit: Suit(i%4)}).collect();
-        let result = best_hand(&cards);
+        let cards: CardTuple = vec![4, 4, 0, 4, 2].into_iter().enumerate().map(|(i, rank)| Card{rank, suit: Suit(i%4)}).collect();
+        let result = best_hand(cards, 5);
         let expected = HandStrength{
             kind: Kind::ThreeKind(4),
-            kickers: vec![NUM_RANKS, 2]
+            kickers: vec![NUM_RANKS, 2].into()
         };
         assert!(result == expected, format!("{:?} != {:?}", result, expected));
     }
 
     #[test]
     fn test_best_hand_three_kind_ace_in_three_kind() {
-        let cards: Vec<Card> = vec![0, 0, 1, 4, 0].into_iter().enumerate().map(|(i, rank)| Card{rank, suit: Suit(i%4)}).collect();
-        let result = best_hand(&cards);
+        let cards: CardTuple = vec![0, 0, 1, 0, 4].into_iter().enumerate().map(|(i, rank)| Card{rank, suit: Suit(i%4)}).collect();
+        let result = best_hand(cards, 5);
         let expected = HandStrength{
             kind: Kind::ThreeKind(NUM_RANKS),
-            kickers: vec![4, 1]
+            kickers: vec![4, 1].into()
         };
         assert!(result == expected, format!("{:?} != {:?}", result, expected));
     }

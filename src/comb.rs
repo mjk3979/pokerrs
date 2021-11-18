@@ -1,20 +1,43 @@
+#[derive(Clone)]
+pub struct Combinations<T, It> {
+    p: usize,
+    stack: Vec<It>,
+    combo: Vec<T>,
+}
 
-pub fn combinations<'a, T>(src: &'a [T], p: usize) -> Vec<Vec<&'a T>> {
-    assert!(src.len() < 63);
+pub fn combinations<T: Clone, I, It: Iterator<Item=T> + Clone>(src: I, p: usize) -> Combinations<T, It>
+    where I: IntoIterator<Item = T, IntoIter=It>
+{
     assert!(p > 0);
-    let mut retval = Vec::new();
-    for mask in 0usize..(1 << src.len()) {
-        let mut attempt = Vec::new();
-        for (idx, e) in src.iter().enumerate() {
-            if (mask & (1 << idx)) != 0 {
-                attempt.push(e);
+    let stack: Vec<_> = vec![src.into_iter()];
+    let combo = Vec::new();
+    Combinations {p, stack, combo}
+}
+
+impl<T: Clone, It: Iterator<Item=T> + Clone> Iterator for Combinations<T, It> {
+    type Item = Vec<T>;
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.combo.len() == self.p {
+            self.combo.pop();
+        }
+        while let Some(mut iter) = self.stack.pop() {
+            if let Some(v) = iter.next() {
+                self.combo.push(v);
+                if self.combo.len() == self.p {
+                    self.stack.push(iter);
+                    return Some(self.combo.clone());
+                } else {
+                    self.stack.push(iter.clone());
+                    self.stack.push(iter);
+                }
+            } else {
+                if !self.combo.is_empty() {
+                    self.combo.pop();
+                }
             }
         }
-        if attempt.len() == p {
-            retval.push(attempt);
-        }
+        None
     }
-    retval
 }
 
 mod test {
@@ -26,7 +49,7 @@ use crate::comb::combinations;
 fn test_combinations_empty() {
     let empty: Vec<i64> = Vec::new();
     for p in 1..5 {
-        let result = combinations(&empty, p);
+        let result: Vec<_> = combinations(&empty, p).collect();
         assert!(result.is_empty(), format!("Combination of empty set not empty: {:?}", result));
     }
 }

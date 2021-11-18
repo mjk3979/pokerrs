@@ -1,4 +1,5 @@
 use crate::game::PokerRoundError;
+use crate::bitcard::RankTuple;
 
 use rand::prelude::*;
 use serde::{Serialize, Deserialize};
@@ -6,14 +7,14 @@ use ts_rs::{TS, export};
 
 use std::cmp::Ordering;
 
-#[derive(Debug, Eq, PartialEq, Clone, Copy, Hash, Serialize, Deserialize, TS)]
+#[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Clone, Copy, Hash, Serialize, Deserialize, TS)]
 pub struct Suit(pub usize);
 
 pub type Rank = usize;
 
 pub type StrengthRank = usize;
 
-#[derive(Debug, Clone, Eq, PartialEq, PartialOrd, Ord, TS)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, PartialOrd, Ord, TS, Hash)]
 #[derive(Serialize, Deserialize)]
 #[serde(tag = "kind", content="data")]
 pub enum Kind {
@@ -25,7 +26,7 @@ pub enum Kind {
     },
     ThreeKind(StrengthRank),
     Straight(StrengthRank),
-    Flush(Vec<StrengthRank>),
+    Flush(RankTuple),
     FullHouse {
         high: StrengthRank,
         low: StrengthRank,
@@ -34,7 +35,7 @@ pub enum Kind {
     StraightFlush(StrengthRank),
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, TS)]
+#[derive(Debug, Copy, Clone, PartialEq, Ord, PartialOrd, Eq, Hash, TS)]
 #[derive(Serialize, Deserialize)]
 pub struct Card {
     pub suit: Suit,
@@ -59,7 +60,7 @@ impl std::fmt::Display for Kind {
             TwoPair{high, low} => write!(f, "Two pair {}s over {}s", rank_name(high), rank_name(low))?,
             ThreeKind(r) => write!(f, "Three {}s", rank_name(r))?,
             Straight(r) => write!(f, "Straight, {} high", rank_name(r))?,
-            Flush(cards) => write!(f, "Flush, {} high", rank_name(&cards[0]))?,
+            Flush(cards) => write!(f, "Flush, {} high", rank_name(&cards.get(0)))?,
             FullHouse{high, low} => write!(f, "Full House {}s over {}s", rank_name(high), rank_name(low))?,
             FourKind(r) => write!(f, "Four {}s", rank_name(r))?,
             StraightFlush(r) => write!(f, "Straight Flush, {} high", rank_name(r))?
@@ -109,7 +110,7 @@ pub trait Shuffleable {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VecDeck {
-    raw: Vec<Card>
+    pub raw: Vec<Card>
 }
 
 impl Deck for VecDeck {
