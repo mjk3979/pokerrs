@@ -474,7 +474,26 @@ pub async fn play_poker<'a>(variant: PokerVariant,
         viewdiffs.clear();
         match state.cur_round {
             None => {
-                if let Some(next_round) = state.rounds.pop() {
+                let end_game = state.players.iter().filter(|(role, player)| {
+                    !player.folded
+                }).count() <= 1;
+                if end_game {
+                    let (winner_role, winner) = state.players.iter().find(|(role, player)| {
+                        !player.folded
+                    }).unwrap();
+                    let subpots = calc_subpots(&state);
+                    let winners = Winners {
+                        winners_by_pot: subpots.into_iter().map(|s| (s, vec![*winner_role])).collect()
+                    };
+                    let mut retval = winners.totals();
+                    for (&role, player) in &state.players {
+                        *retval.entry(role).or_insert(0) -= player.total_bet;
+                    }
+                    viewdiffs.push(PokerGlobalViewDiff::Common(PokerViewDiff::Winners(winners)));
+                    update_players(&players, &ids, &spectator_channel, &state, &viewdiffs, round);
+                    viewdiffs.clear();
+                    return Ok(retval);
+                } else if let Some(next_round) = state.rounds.pop() {
                     state.cur_round = Some(RoundState::new(&next_round));
                 } else {
                     show_cards(&mut state.players, &mut viewdiffs, hand_last_bet, state.community_cards);
@@ -560,8 +579,8 @@ pub async fn play_poker<'a>(variant: PokerVariant,
                         }
                         let player = state.players.get_mut(&bet_role).unwrap();
                         let mut this_bet = None;
-                        if !player.folded && player.chips > *all_bets.get(&bet_role).unwrap_or(&0) {
                             //println!("Waiting on {}", bet_role);
+                        if !player.folded && player.chips > player.total_bet + *all_bets.get(&bet_role).unwrap_or(&0) {
                             let f = players.get(&bet_role).unwrap().input.bet(last_bet_amount, min_bet);
                             match f.await {
                                 BetResp::Bet(num_chips) => {

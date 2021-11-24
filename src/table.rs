@@ -195,7 +195,7 @@ impl Table {
         };
         match variant_state {
             PokerVariantState::Rotation{variants, mut idx} => {
-                if idx > variants.descs.len() {
+                if idx >= variants.descs.len() {
                     idx = 0;
                 }
                 let retval = variants.variants.get(idx).unwrap().clone();
