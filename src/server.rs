@@ -212,7 +212,7 @@ impl GameServer {
             }
         });
 
-        let addr = ([127, 0, 0, 1], 8080).into();
+        let addr = ([0, 0, 0, 0], 8080).into();
         
         let http_server = Server::bind(&addr)
             .serve(make_service_fn(|conn| {
