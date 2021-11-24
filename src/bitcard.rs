@@ -358,7 +358,7 @@ mod test {
 
         let expected = vec![3, 5, 9, 0, 2, NUM_RANKS];
         let result = expected.iter().copied().collect::<RankTuple>().iter().collect::<Vec<_>>();
-        assert!(result == expected, format!("{:?}", result));
+        assert!(result == expected, "{:?}", result);
     }
 
     #[test]
@@ -430,7 +430,7 @@ mod test {
 
         let ranks: RankTuple = cards.into();
         assert!(ranks.len() == 5);
-        assert!(ranks.get(0) == 4, format!("{:?}", ranks));
+        assert!(ranks.get(0) == 4, "{:?}", ranks);
         assert!(ranks.get(1) == 2);
         assert!(ranks.get(2) == 1);
         assert!(ranks.get(3) == 4);
@@ -448,25 +448,25 @@ mod test {
             suit: Suit(2)
         }));
         let result = cs.iter().collect::<Vec<_>>();
-        assert!(result == vec![Card{rank: 4, suit: Suit(2)}], format!("{:?}", result));
+        assert!(result == vec![Card{rank: 4, suit: Suit(2)}], "{:?}", result);
         assert!(!cs.insert(Card {
             rank: 4,
             suit: Suit(2)
         }));
         let result = cs.iter().collect::<Vec<_>>();
-        assert!(result == vec![Card{rank: 4, suit: Suit(2)}], format!("{:?}", result));
+        assert!(result == vec![Card{rank: 4, suit: Suit(2)}], "{:?}", result);
 
         assert!(cs.insert(Card {
             rank: 9,
             suit: Suit(1)
         }));
         let result = cs.iter().collect::<Vec<_>>();
-        assert!(result == vec![Card{rank: 9, suit: Suit(1)}, Card{rank: 4, suit: Suit(2)}], format!("{:?}", result));
+        assert!(result == vec![Card{rank: 9, suit: Suit(1)}, Card{rank: 4, suit: Suit(2)}], "{:?}", result);
         assert!(!cs.insert(Card {
             rank: 9,
             suit: Suit(1)
         }));
         let result = cs.iter().collect::<Vec<_>>();
-        assert!(result == vec![Card{rank: 9, suit: Suit(1)}, Card{rank: 4, suit: Suit(2)}], format!("{:?}", result));
+        assert!(result == vec![Card{rank: 9, suit: Suit(1)}, Card{rank: 4, suit: Suit(2)}], "{:?}", result);
     }
 }

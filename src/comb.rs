@@ -50,7 +50,7 @@ fn test_combinations_empty() {
     let empty: Vec<i64> = Vec::new();
     for p in 1..5 {
         let result: Vec<_> = combinations(&empty, p).collect();
-        assert!(result.is_empty(), format!("Combination of empty set not empty: {:?}", result));
+        assert!(result.is_empty(), "Combination of empty set not empty: {:?}", result);
     }
 }
 

@@ -649,7 +649,7 @@ mod test {
     fn test_explode_aces_do_nothing() {
         let cards: CardTuple = vec![1, 2, 3, NUM_RANKS-1, 9].into_iter().map(|rank| Card{rank, suit: Suit(0)}).collect();
         let result = explode_aces(cards);
-        assert!(result == cards, format!("{:?} != {:?}", result, cards));
+        assert!(result == cards, "{:?} != {:?}", result, cards);
     }
 
     #[test]
@@ -661,7 +661,7 @@ mod test {
             suit: Suit(0)
         });
         let result = explode_aces(cards);
-        assert!(result == expected, format!("{:?} != {:?}", result, expected));
+        assert!(result == expected, "{:?} != {:?}", result, expected);
     }
 
     #[test]
@@ -673,7 +673,7 @@ mod test {
             suit: Suit(0)
         });
         let result = explode_aces(cards);
-        assert!(result == expected, format!("{:?} != {:?}", result, expected));
+        assert!(result == expected, "{:?} != {:?}", result, expected);
     }
 
     #[test]
@@ -685,7 +685,7 @@ mod test {
             suit: Suit(0)
         });
         let result = explode_aces(cards);
-        assert!(result == expected, format!("{:?} != {:?}", result, expected));
+        assert!(result == expected, "{:?} != {:?}", result, expected);
     }
 
     #[test]
@@ -701,7 +701,7 @@ mod test {
             suit: Suit(0)
         });
         let result = explode_aces(cards);
-        assert!(result == expected, format!("{:?} != {:?}", result, expected));
+        assert!(result == expected, "{:?} != {:?}", result, expected);
     }
 
     #[test]
@@ -717,7 +717,7 @@ mod test {
             suit: Suit(0)
         });
         let result = explode_aces(cards);
-        assert!(result == expected, format!("{:?} != {:?}", result, expected));
+        assert!(result == expected, "{:?} != {:?}", result, expected);
     }
 
     #[test]
@@ -741,7 +741,7 @@ mod test {
             suit: Suit(0)
         });
         let result = explode_aces(cards);
-        assert!(result == expected, format!("{:?} != {:?}", result, expected));
+        assert!(result == expected, "{:?} != {:?}", result, expected);
     }
 
     #[test]
@@ -752,7 +752,7 @@ mod test {
             kind: Kind::HighCard(9),
             kickers: vec![7, 5, 4, 2].into()
         };
-        assert!(result == expected, format!("{:?} != {:?}", result, expected));
+        assert!(result == expected, "{:?} != {:?}", result, expected);
     }
     
     #[test]
@@ -763,7 +763,7 @@ mod test {
             kind: Kind::HighCard(NUM_RANKS),
             kickers: vec![9, 5, 4, 2].into()
         };
-        assert!(result == expected, format!("{:?} != {:?}", result, expected));
+        assert!(result == expected, "{:?} != {:?}", result, expected);
     }
 
     #[test]
@@ -774,7 +774,7 @@ mod test {
             kind: Kind::Pair(4),
             kickers: vec![9, 2, 1].into()
         };
-        assert!(result == expected, format!("{:?} != {:?}", result, expected));
+        assert!(result == expected, "{:?} != {:?}", result, expected);
     }
 
     #[test]
@@ -785,7 +785,7 @@ mod test {
             kind: Kind::Pair(4),
             kickers: vec![NUM_RANKS, 9, 1].into()
         };
-        assert!(result == expected, format!("{:?} != {:?}", result, expected));
+        assert!(result == expected, "{:?} != {:?}", result, expected);
     }
 
     #[test]
@@ -796,7 +796,7 @@ mod test {
             kind: Kind::Pair(NUM_RANKS),
             kickers: vec![4, 2, 1].into()
         };
-        assert!(result == expected, format!("{:?} != {:?}", result, expected));
+        assert!(result == expected, "{:?} != {:?}", result, expected);
     }
 
     #[test]
@@ -807,7 +807,7 @@ mod test {
             kind: Kind::TwoPair{high: 4, low: 2},
             kickers: vec![1].into()
         };
-        assert!(result == expected, format!("{:?} != {:?}", result, expected));
+        assert!(result == expected, "{:?} != {:?}", result, expected);
     }
 
     #[test]
@@ -818,7 +818,7 @@ mod test {
             kind: Kind::TwoPair{high: 4, low: 2},
             kickers: vec![NUM_RANKS].into()
         };
-        assert!(result == expected, format!("{:?} != {:?}", result, expected));
+        assert!(result == expected, "{:?} != {:?}", result, expected);
     }
 
     #[test]
@@ -829,7 +829,7 @@ mod test {
             kind: Kind::TwoPair{high: NUM_RANKS, low: 4},
             kickers: vec![1].into()
         };
-        assert!(result == expected, format!("{:?} != {:?}", result, expected));
+        assert!(result == expected, "{:?} != {:?}", result, expected);
     }
 
     #[test]
@@ -840,7 +840,7 @@ mod test {
             kind: Kind::ThreeKind(4),
             kickers: vec![2, 1].into()
         };
-        assert!(result == expected, format!("{:?} != {:?}", result, expected));
+        assert!(result == expected, "{:?} != {:?}", result, expected);
     }
 
     #[test]
@@ -851,7 +851,7 @@ mod test {
             kind: Kind::ThreeKind(4),
             kickers: vec![NUM_RANKS, 2].into()
         };
-        assert!(result == expected, format!("{:?} != {:?}", result, expected));
+        assert!(result == expected, "{:?} != {:?}", result, expected);
     }
 
     #[test]
@@ -862,7 +862,7 @@ mod test {
             kind: Kind::ThreeKind(NUM_RANKS),
             kickers: vec![4, 1].into()
         };
-        assert!(result == expected, format!("{:?} != {:?}", result, expected));
+        assert!(result == expected, "{:?} != {:?}", result, expected);
     }
 
     fn make_test_calc_winners_state(players: HashMap<PlayerRole, PlayerState>) -> HandState {
@@ -897,7 +897,7 @@ mod test {
             chips: 34,
             players: vec![0, 1]
         }];
-        assert!(result == expected, format!("{:?} != {:?}", result, expected));
+        assert!(result == expected, "{:?} != {:?}", result, expected);
     }
 
     #[test]
@@ -922,7 +922,7 @@ mod test {
             chips: 34,
             players: vec![0]
         }];
-        assert!(result == expected, format!("{:?} != {:?}", result, expected));
+        assert!(result == expected, "{:?} != {:?}", result, expected);
     }
 
     #[test]
@@ -956,7 +956,7 @@ mod test {
             chips: 24,
             players: vec![0, 1]
         }];
-        assert!(result == expected, format!("{:?} != {:?}", result, expected));
+        assert!(result == expected, "{:?} != {:?}", result, expected);
     }
 
     #[test]
@@ -987,7 +987,7 @@ mod test {
             chips: 42,
             players: vec![1, 2]
         }];
-        assert!(result == expected, format!("{:?} != {:?}", result, expected));
+        assert!(result == expected, "{:?} != {:?}", result, expected);
     }
 
     #[test]
@@ -1027,7 +1027,7 @@ mod test {
             chips: 10,
             players: vec![0, 3]
         }];
-        assert!(result == expected, format!("{:?} != {:?}", result, expected));
+        assert!(result == expected, "{:?} != {:?}", result, expected);
     }
 
     #[test]
@@ -1036,7 +1036,7 @@ mod test {
         let pot = 33;
         let result = split_pot(&players, pot);
         let expected = vec![(0, 11), (2, 11), (3, 11)];
-        assert!(result == expected, format!("{:?} != {:?}", result, expected));
+        assert!(result == expected, "{:?} != {:?}", result, expected);
     }
 
     #[test]
@@ -1045,7 +1045,7 @@ mod test {
         let pot = 35;
         let result = split_pot(&players, pot);
         let expected = vec![(0, 12), (2, 12), (3, 11)];
-        assert!(result == expected, format!("{:?} != {:?}", result, expected));
+        assert!(result == expected, "{:?} != {:?}", result, expected);
     }
 
     fn make_cards(ts: Vec<(usize, usize)>) -> Vec<CardState> {
@@ -1086,6 +1086,6 @@ mod test {
         let mut state = make_test_calc_winners_state(players);
         let result = calc_winners(&state).totals();
         let expected: HashMap<PlayerRole, Chips> = vec![(2, 44), (3, 10)].into_iter().collect();
-        assert!(result == expected, format!("{:?} != {:?}", result, expected));
+        assert!(result == expected, "{:?} != {:?}", result, expected);
     }
 }
