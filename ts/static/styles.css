@@ -103,6 +103,7 @@ html, body {
     height: 100%;
     background-color: white;
     padding: 2px;
+    border-width: 0.2em;
 }
 
 .center {
@@ -198,4 +199,14 @@ html, body {
 
 .biggap {
     gap: 3em;
+}
+
+.deselected {
+    border-style: solid;
+    border-color: #35654D;
+}
+
+.selected {
+    border-style: inset;
+    border-color: cyan;
 }

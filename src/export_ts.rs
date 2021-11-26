@@ -1,3 +1,4 @@
+use crate::bitcard::*;
 use crate::card::*;
 use crate::game::*;
 use crate::gamestate::*;
@@ -19,6 +20,7 @@ export! {
     BetDiffKind,
     PokerVariantDesc,
     PokerVariants,
+    PokerVariantSelector,
     PokerViewDiff<PlayerId>,
     CardState,
     HandStrength,
@@ -27,6 +29,8 @@ export! {
     Seat,
     Suit,
     Card,
+    RankTuple,
+    CardTuple,
     Kind,
     ServerActionRequest,
     ServerPlayer,

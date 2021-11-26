@@ -27,6 +27,27 @@ function fetch_update(player_id: string, start_from: number, known_action_reques
     });
 }
 
+var clicked_cards: Array<number> | null = null;
+var max_can_replace: number = 0;
+function clicked_card(cidx: number) {
+    const call_button = <HTMLInputElement>document.getElementById("call_button")!;
+    const player_screen = document.getElementById("player_div")!;
+    const player_cards = player_screen.getElementsByClassName("card_container")[0]!.children;
+    if (clicked_cards) {
+        let idx = clicked_cards.indexOf(cidx);
+        if (idx != -1) {
+            clicked_cards.splice(idx, 1);
+            player_cards[cidx].classList.remove("selected");
+            player_cards[cidx].classList.add("deselected");
+        } else if (clicked_cards.length < max_can_replace) {
+            clicked_cards.push(cidx);
+            player_cards[cidx].classList.add("selected");
+            player_cards[cidx].classList.remove("deselected");
+        }
+        call_button.value = `Replace ${clicked_cards.length} cards`;
+    }
+}
+
 function make_card(card: CardViewState): HTMLElement {
     let img = document.createElement("img");
     switch(card.kind) {
@@ -104,18 +125,29 @@ function mod(a: number, m: number): number {
 }
 
 function draw_players(player_id: string, viewstate: PokerViewState | null, table: TableViewState) {
-    const player_screen = document.getElementById("player_div");
-    const player_label = player_screen?.getElementsByClassName("player_name")[0]!;
-    const player_chips_label = player_screen?.getElementsByClassName("player_chips")[0]!;
+    const player_screen = document.getElementById("player_div")!;
+    const player_label = player_screen.getElementsByClassName("player_name")[0]!;
+    const player_chips_label = player_screen.getElementsByClassName("player_chips")[0]!;
     const player = viewstate?.players[viewstate.role];
-    const player_cards = player_screen?.getElementsByClassName("card_container")[0]!;
+    const player_cards = player_screen.getElementsByClassName("card_container")[0]!;
     player_label.innerHTML = player_id;
     if (player) {
         const player_chips = player.chips - player.total_bet - (viewstate?.bet_this_round[viewstate.role] ?? 0);
         player_chips_label.innerHTML = `${player_chips} 🪙`;
         player_cards.innerHTML = "";
-        for (const card of player.hand) {
-            player_cards.appendChild(make_card(card));
+        for (let cidx = 0; cidx < player.hand.length; cidx += 1) {
+            const card = player.hand[cidx];
+            let card_view = make_card(card);
+            const fixed_cidx = cidx;
+            if (clicked_cards?.includes(cidx)) {
+                card_view.classList.add("selected");
+            } else {
+                card_view.classList.add("deselected");
+            }
+            card_view.addEventListener('click', () => {
+                clicked_card(fixed_cidx);
+            });
+            player_cards.appendChild(card_view);
         }
     } else {
         player_chips_label.innerHTML = "";
@@ -183,7 +215,12 @@ function draw_action(action: ServerActionRequest | null, viewstate: PokerViewSta
     const bet_input = <HTMLInputElement>document.getElementById("bet_input")!;
     const call_amount_input = <HTMLInputElement>document.getElementById("call_amount_input")!;
     const bet_this_round_input = <HTMLInputElement>document.getElementById("bet_this_round_input")!;
+    const replace_cards_label = <HTMLElement>document.getElementById("replace_cards_label")!;
+
+    call_button.value = "Call";
     if (action && viewstate && action.kind == "Bet") {
+        replace_cards_label.classList.add("hidden");
+
         call_button.removeAttribute("disabled");
         fold_button.removeAttribute("disabled");
         bet_button.removeAttribute("disabled");
@@ -207,11 +244,27 @@ function draw_action(action: ServerActionRequest | null, viewstate: PokerViewSta
         bet_input.value = min.toString();
         call_amount_input.value = call_amount.toString();
         bet_this_round_input.value = bet_this_round.toString();
+    } else if (action && viewstate && action.kind == "Replace") {
+        fold_button.setAttribute("disabled", "");
+        bet_button.setAttribute("disabled", "");
+        bet_input.setAttribute("disabled", "");
+        bet_input.value = "";
+
+        call_button.removeAttribute("disabled");
+        call_button.value = `Replace 0 cards`;
+
+        replace_cards_label.classList.remove("hidden");
+        replace_cards_label.innerHTML = `Replace up to ${action.data.max_can_replace} cards. Click cards to select/deselect`;
+        max_can_replace = action.data.max_can_replace;
+
+        clicked_cards = [];
     } else {
         call_button.setAttribute("disabled", "");
         fold_button.setAttribute("disabled", "");
         bet_button.setAttribute("disabled", "");
         bet_input.setAttribute("disabled", "");
+        replace_cards_label.classList.add("hidden");
+        bet_input.value = "";
     }
 }
 
@@ -318,6 +371,40 @@ function join() {
     }
 }
 
+function reset_input() {
+    draw_action(null, null);
+}
+
+function replace() {
+    const player_input = document.getElementById("name_input");
+    const player_id = (<HTMLInputElement>player_input).value.trim();
+    const call_button = document.getElementById("call_button")!;
+    if (clicked_cards) {
+        let replace_resp = clicked_cards;
+        clicked_cards = null;
+        call_button.setAttribute("disabled", "");
+        let revert = () => {
+            clicked_cards = [];
+            call_button.removeAttribute("disabled");
+            for (const cidx of replace_resp) {
+                clicked_card(cidx);
+            }
+        };
+        fetch(`/replace?player=${player_id}`, {
+            method: "POST",
+            body: JSON.stringify(replace_resp)
+        }).then(resp => {
+            if (resp.ok) {
+                reset_input();
+            } else {
+                revert();
+            }
+        }).catch(err => {
+            revert();
+        });
+    }
+}
+
 function bet(action: "bet" | "fold" | "call") {
     const player_input = document.getElementById("name_input")!;
     const player_id = (<HTMLInputElement>player_input).value.trim();
@@ -372,6 +459,20 @@ function start_server() {
     });
 }
 
+function add_bot() {
+    fetch('/add_bot', {
+        method: 'POST'
+    });
+}
+
+function call_button_clicked() {
+    if (clicked_cards) {
+        replace();
+    } else {
+        bet("call");
+    }
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     const player_input = document.getElementById("name_submit")!;
     const call_button = document.getElementById("call_button")!;
@@ -381,11 +482,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const prev_round_button = document.getElementById("prev_round_button")!;
     const next_round_button = document.getElementById("next_round_button")!;
     const start_server_button = document.getElementById("start_server_button")!;
+    const add_bot_button = document.getElementById("add_bot_button")!;
     player_input.addEventListener('click', () => {
         join();
     });
     call_button.addEventListener('click', () => {
-        bet("call");
+        call_button_clicked();
     });
     fold_button.addEventListener('click', () => {
         bet("fold");
@@ -401,5 +503,8 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     start_server_button.addEventListener('click', () => {
         start_server();
+    });
+    add_bot_button.addEventListener('click', () => {
+        add_bot();
     });
 });

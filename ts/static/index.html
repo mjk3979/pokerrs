@@ -30,7 +30,10 @@
                         </div>
                     </div>
                     <div class="centered_vlist">
-                        <input id="start_server_button" type="button" class="large_button ok_button" value="Start Server" />
+                        <div class="calign">
+                            <input id="start_server_button" type="button" class="large_button ok_button" value="Start Server" />
+                            <input id="add_bot_button" type="button" class="large_button bet_button" value="Add Bot" />
+                        </div>
                         <span class="label">Pot</span>
                         <span id="pot_label" class="pot_label">20 🪙</span>
                     </div>
@@ -46,6 +49,7 @@
                         <img src="card_images/200px-Cards-10-Diamond.svg.png" />
                     </div>
                 </div>
+                <span class="label hidden" id="replace_cards_label">Replace up to 3 cards</span>
                 <div class="lalign">
                     <input type="button" value="Check" id="call_button" class="large_button check_button" />
                     <input type="button" value="Fold" id="fold_button" class="large_button fold_button" />
