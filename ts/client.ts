@@ -216,8 +216,13 @@ function draw_action(action: ServerActionRequest | null, viewstate: PokerViewSta
     const call_amount_input = <HTMLInputElement>document.getElementById("call_amount_input")!;
     const bet_this_round_input = <HTMLInputElement>document.getElementById("bet_this_round_input")!;
     const replace_cards_label = <HTMLElement>document.getElementById("replace_cards_label")!;
+    const dealers_choice_modal = <HTMLElement>document.getElementById("dealers_choice_modal")!;
+    const dealers_choice_list = <HTMLElement>document.getElementById("dealers_choice_list")!;
 
     call_button.value = "Call";
+    dealers_choice_list.innerHTML = "";
+    dealers_choice_modal.classList.add("hidden");
+
     if (action && viewstate && action.kind == "Bet") {
         replace_cards_label.classList.add("hidden");
 
@@ -258,6 +263,28 @@ function draw_action(action: ServerActionRequest | null, viewstate: PokerViewSta
         max_can_replace = action.data.max_can_replace;
 
         clicked_cards = [];
+    } else if (action && viewstate && action.kind == "DealersChoice") {
+        call_button.setAttribute("disabled", "");
+        fold_button.setAttribute("disabled", "");
+        bet_button.setAttribute("disabled", "");
+        bet_input.setAttribute("disabled", "");
+        replace_cards_label.classList.add("hidden");
+        bet_input.value = "";
+        dealers_choice_list.innerHTML = "";
+
+        dealers_choice_modal.classList.remove("hidden");
+
+        for (let vidx = 0; vidx < action.data.variants.length; vidx += 1) {
+            const desc = action.data.variants[vidx];
+            const button = document.createElement("input");
+            button.setAttribute("type", "button");
+            button.classList.add("dealers_choice_button");
+            button.value = desc.name;
+            button.addEventListener('click', () => {
+                dealers_choice(vidx);
+            });
+            dealers_choice_list.appendChild(button);
+        }
     } else {
         call_button.setAttribute("disabled", "");
         fold_button.setAttribute("disabled", "");
@@ -373,6 +400,32 @@ function join() {
 
 function reset_input() {
     draw_action(null, null);
+}
+
+function dealers_choice(idx: number) {
+    const player_input = document.getElementById("name_input");
+    const player_id = (<HTMLInputElement>player_input).value.trim();
+    const dealers_choice_list = <HTMLElement>document.getElementById("dealers_choice_list");
+    let revert = () => {
+        for (const element of dealers_choice_list.getElementsByClassName("dealers_choice_button")) {
+            element.removeAttribute("disabled");
+        }
+    };
+    for (const element of dealers_choice_list.getElementsByClassName("dealers_choice_button")) {
+        (<HTMLElement>element).setAttribute("disabled", "");
+    }
+    fetch(`/dealers_choice?player=${player_id}`, {
+        method: "POST",
+        body: JSON.stringify(idx)
+    }).then(resp => {
+        if (resp.ok) {
+            reset_input();
+        } else {
+            revert();
+        }
+    }).catch(err => {
+        revert();
+    });
 }
 
 function replace() {
