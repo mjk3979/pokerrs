@@ -55,6 +55,7 @@ pub struct TableViewState {
     pub roles: Option<HashMap<PlayerRole, PlayerId>>,
     pub seats: HashMap<PlayerId, Seat>,
     pub config: TableConfig,
+    pub running_variant: Option<PokerVariantDesc>,
 }
 
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]

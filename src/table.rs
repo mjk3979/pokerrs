@@ -61,7 +61,8 @@ struct TableState {
     roles: Option<HashMap<PlayerId, PlayerRole>>,
     old_logs: Vec<HandLog>,
     current_log_start: usize,
-    variant_state: PokerVariantState
+    variant_state: PokerVariantState,
+    running_variant: Option<PokerVariantDesc>,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -169,7 +170,8 @@ impl Table {
             roles: None,
             current_log_start: 0,
             old_logs: Vec::new(),
-            variant_state: config.variant_selector.clone().into()
+            variant_state: config.variant_selector.clone().into(),
+            running_variant: None,
         };
         let (running_tx, running_rx) = watch::channel(false);
         let (spectator_tx, spectator_rx) = fold_channel::channel(Vec::new(), |v, t: Vec<PokerGlobalViewDiff<PlayerId>>| v.extend_from_slice(&t));
@@ -187,7 +189,7 @@ impl Table {
         }
     }
 
-    async fn get_next_variant(&self) -> PokerVariant {
+    async fn get_next_variant(&self) -> (PokerVariant, PokerVariantDesc) {
         let (variant_state, dealer) = {
             let state = self.state.lock().unwrap();
             let variant_state = state.variant_state.clone();
@@ -198,16 +200,19 @@ impl Table {
                 if idx >= variants.descs.len() {
                     idx = 0;
                 }
+                let desc = variants.descs.get(idx).unwrap().clone();
                 let retval = variants.variants.get(idx).unwrap().clone();
                 {
                     idx += 1;
                     let mut state = self.state.lock().unwrap();
                     state.variant_state = PokerVariantState::Rotation{variants, idx};
                 }
-                retval
+                (retval, desc)
             },
             PokerVariantState::DealersChoice{variants} => {
-                variants.variants.get(dealer.input.dealers_choice(variants.descs).await).unwrap().clone()
+                let idx = dealer.input.dealers_choice(variants.descs.clone()).await;
+                let desc = variants.descs.get(idx).unwrap().clone();
+                (variants.variants.get(idx).unwrap().clone(), desc)
             },
         }
     }
@@ -238,7 +243,13 @@ impl Table {
             let mut rng = rand::thread_rng();
             deck.shuffle(&mut rng);
         }
-        match play_poker(self.get_next_variant().await,
+        let (variant, variant_desc) = self.get_next_variant().await;
+        {
+            let mut state = self.state.lock().unwrap();
+            state.running_variant = Some(variant_desc);
+            self.table_view_tx.send(self.viewstate(&state));
+        }
+        match play_poker(variant,
             Mutex::new(deck),
             players,
             Some(self.spectator_tx.clone()),
@@ -259,6 +270,7 @@ impl Table {
                 for (role, change) in winners.into_iter() {
                     state.players.get_mut(roles.get(&role).unwrap()).unwrap().chips += change;
                 }
+                state.running_variant = None;
                 self.table_view_tx.send(self.viewstate(&state));
             }
             Err(message) => {
@@ -314,6 +326,7 @@ impl Table {
             roles: state.roles.as_ref().map(|h| h.iter().map(|(p, &r)| (r, p.clone())).collect()),
             seats: state.seats.iter().map(|(s, p)| (p.clone(), *s)).collect(),
             config: config.clone(),
+            running_variant: state.running_variant.clone(),
         }
     }
 }

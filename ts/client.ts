@@ -343,11 +343,14 @@ function update_logs(update: ServerUpdate | null, log_page_change: number | null
 function draw(player_id: string, update: ServerUpdate) {
     const game_screen = document.getElementById("game_screen");
     const start_server_button = document.getElementById("start_server_button")!;
+    const variant_label = document.getElementById("variant_name_label")!;
     game_screen?.classList.remove("hidden");
     const viewstate = update.player?.viewstate ?? null;
     const action = update.player?.action_requested ?? null;
     draw_players(player_id, viewstate, update.table);
     draw_action(action, viewstate);
+
+    variant_label.innerHTML = update.table.running_variant?.name ?? "Waiting for next game...";
 
     if (update.table.running) {
         start_server_button.classList.add("hidden");
@@ -376,6 +379,9 @@ function draw(player_id: string, update: ServerUpdate) {
         for (const card of viewstate.community_cards) {
             community_cards.appendChild(make_card(card));
         }
+    } else {
+        pot_label.innerHTML = '';
+        community_cards.innerHTML = "";
     }
 
     update_logs(update, null);
