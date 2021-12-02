@@ -232,3 +232,17 @@ html, body {
     padding: 4em;
     border-radius: 0.25em;
 }
+
+.settings_label {
+    font-weight: bold;
+    font-size: 1.25em;
+}
+
+.marth {
+    width: 100%;
+    justify-content: space-between;
+}
+
+.evenspace {
+    justify-content: space-evenly;
+}

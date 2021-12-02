@@ -79,6 +79,64 @@
             </div>
         </div>
     </div>
+    <div id="table_settings_modal" class="modal_container center">
+        <div class="vlist modal">
+            <div class="marth biggap hfill">
+                <label for="max_players_input" class="settings_label">
+                    Max Number of Players
+                </label>
+                <input name="max_players_input" id="max_players_input" type="number" min="2" max="14" value="8" />
+            </div>
+            <div class="marth biggap hfill">
+                <label for="starting_chips_input" class="settings_label">
+                    Starting Chips
+                </label>
+                <input name="starting_chips_input" id="starting_chips_input" type="number" min="1" value="1000" />
+            </div>
+            <span class="settings_label">Game</span>
+            <div class="biggap marth">
+                <label>
+                    Dealer's Choice
+                    <input type="radio" name="game" value="dealers_choice" />
+                </label>
+                <label>
+                    Rotation
+                    <input type="radio" name="game" value="rotation" />
+                </label>
+                <label>
+                    Single Variant
+                    <input type="radio" name="game" value="single" />
+                </label>
+            </div>
+            <div id="variant_list_div" class="biggap marth">
+                <div class="vlist">
+                    <label class="settings_label">
+                        Excluded
+                    </label>
+                    <select id="variants_excluded_input" multiple>
+                        <datalist id="variants_excluded">
+                            <option value="Five Card Draw">Five Card Draw</option>
+                            <option value="Seven Card Stud">Seven Card Stud</option>
+                            <option value="Five Card Stud">Five Card Stud</option>
+                        </datalist>
+                    </select>
+                </div>
+                <div class="calign evenspace">
+                    <input type="button" 
+                <div class="vlist">
+                    <label class="settings_label">
+                        Included
+                    </label>
+                    <select id="variants_included_input" multiple>
+                        <datalist id="variants_included">
+                            <option value="Texas Hold 'Em">Texas Hold 'Em</option>
+                            <option value="Omaha Hold 'Em">Omaha Hold 'Em</option>
+                        </datalist>
+                    </select>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
 </body>
 </html>
