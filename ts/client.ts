@@ -263,7 +263,7 @@ function draw_action(action: ServerActionRequest | null, viewstate: PokerViewSta
         max_can_replace = action.data.max_can_replace;
 
         clicked_cards = [];
-    } else if (action && viewstate && action.kind == "DealersChoice") {
+    } else if (action && action.kind == "DealersChoice") {
         call_button.setAttribute("disabled", "");
         fold_button.setAttribute("disabled", "");
         bet_button.setAttribute("disabled", "");
