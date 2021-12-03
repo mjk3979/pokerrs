@@ -187,7 +187,7 @@ impl GameServer {
     pub async fn create_and_serve<'a>(table_rules: TableRules) {
         let table_config = TableConfig {
             max_players: 4,
-            starting_chips: 200,
+            starting_chips: 1000,
             //variant_selector: PokerVariantSelector::Rotation(PokerVariants::all()),
             variant_selector: PokerVariantSelector::DealersChoice(PokerVariants::all()),
             //variant_selector: PokerVariantSelector::Rotation(PokerVariants {
@@ -198,7 +198,7 @@ impl GameServer {
             //}),
         };
         let static_files = StaticFiles::from_dir_path("ts/static");
-        let table = Table::new(table_config, table_rules);
+        let table = Table::new(table_config, table_rules, |round| AnteRule::Ante((1 << ((round+1)/2)) as i64));
         let table_spectator_rx = table.spectator_rx.clone();
         let server = Arc::new({
             //let (log_update_channel_t, log_update_channel_r) = watch::channel(());

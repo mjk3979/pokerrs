@@ -27,6 +27,8 @@ pub enum AnteRule {
     Blinds(Vec<Blind>)
 }
 
+pub type AnteRuleFn = fn (round: usize) -> AnteRule;
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TableRules {
     pub ante: AnteRule,
@@ -91,6 +93,7 @@ pub struct Table {
     pub spectator_rx: fold_channel::Receiver<Vec<PokerGlobalViewDiff<PlayerId>>>,
     table_view_tx: watch::Sender<TableViewState>,
     pub table_view_rx: watch::Receiver<TableViewState>,
+    ante_rule: AnteRuleFn,
 }
 
 pub enum JoinError {
@@ -162,7 +165,7 @@ impl TableState {
 }
 
 impl Table {
-    pub fn new(config: TableConfig, rules: TableRules) -> Table {
+    pub fn new(config: TableConfig, rules: TableRules, ante_rule: AnteRuleFn) -> Table {
         let state = TableState {
             players: HashMap::new(),
             seats: BTreeMap::new(),
@@ -185,7 +188,8 @@ impl Table {
             spectator_tx,
             spectator_rx,
             table_view_tx,
-            table_view_rx
+            table_view_rx,
+            ante_rule,
         }
     }
 
@@ -249,11 +253,17 @@ impl Table {
             state.running_variant = Some(variant_desc);
             self.table_view_tx.send(self.viewstate(&state));
         }
+        let mut rules = self.rules.clone();
+        rules.ante = (self.ante_rule)(round);
+        rules.min_bet = match &rules.ante {
+            AnteRule::Ante(ante) => *ante,
+            AnteRule::Blinds(blinds) => blinds.iter().map(|b| b.amount).max().unwrap(),
+        };
         match play_poker(variant,
             Mutex::new(deck),
             players,
             Some(self.spectator_tx.clone()),
-            self.rules.clone(),
+            rules,
             round,
             ).await {
             Ok(winners) => {

@@ -415,7 +415,7 @@ fn update_players<'a, 'b, 'c, 'd, 'e>(players: &'b HashMap<PlayerRole, LivePlaye
     }
 }
 
-pub fn show_cards(players: &mut HashMap<PlayerRole, PlayerState>, viewdiffs: &mut Vec<PokerGlobalViewDiff<PlayerRole>>, last_bet: Option<PlayerRole>, community_cards: CardTuple) {
+pub fn show_cards(variant: &PokerVariant, players: &mut HashMap<PlayerRole, PlayerState>, viewdiffs: &mut Vec<PokerGlobalViewDiff<PlayerRole>>, last_bet: Option<PlayerRole>, community_cards: CardTuple) {
     // last best and then to the left
     let starting = last_bet.unwrap_or(0); // todo who actually goes first?
     let num_players = players.len();
@@ -430,11 +430,13 @@ pub fn show_cards(players: &mut HashMap<PlayerRole, PlayerState>, viewdiffs: &mu
             }
         }
         if !shown.is_empty() {
-            let mut all_cards = community_cards;
-            for &cs in player.hand.iter() {
-                all_cards.push(cs.card);
-            }
-            let strength = best_hand(all_cards, 5);
+            let strength = combinations(&player.hand, variant.use_from_hand).into_iter().map(|combo| {
+                let mut all_cards = community_cards.clone();
+                for &cs in combo {
+                    all_cards.push(cs.card);
+                }
+                best_hand(all_cards, 5)
+            }).max().unwrap();
             viewdiffs.push(PokerGlobalViewDiff::Common(PokerViewDiff::ShowCards {
                 player: role,
                 shown,
@@ -498,7 +500,7 @@ pub async fn play_poker<'a>(variant: PokerVariant,
                 } else if let Some(next_round) = state.rounds.pop() {
                     state.cur_round = Some(RoundState::new(&next_round));
                 } else {
-                    show_cards(&mut state.players, &mut viewdiffs, hand_last_bet, state.community_cards);
+                    show_cards(&variant, &mut state.players, &mut viewdiffs, hand_last_bet, state.community_cards);
                     update_players(&players, &ids, &spectator_channel, &state, &viewdiffs, round);
                     viewdiffs.clear();
                     let winners = calc_winners(&variant, &state);
@@ -1120,6 +1122,43 @@ mod test {
         let mut state = make_test_calc_winners_state(players);
         let result = calc_winners(&five_card_stud(), &state).totals();
         let expected: HashMap<PlayerRole, Chips> = vec![(2, 44), (0, 10)].into_iter().collect();
+        assert!(result == expected, "{:?} != {:?}", result, expected);
+    }
+
+    #[test]
+    fn test_calc_winners_omaha() {
+        let mut players = HashMap::new();
+        players.insert(0, PlayerState {
+            chips: 0,
+            hand: make_cards(vec![(0, 0), (0,1), (1, 2), (9, 2),]),
+            folded: false,
+            total_bet: 17
+        });
+        players.insert(1, PlayerState {
+            chips: 0,
+            hand: make_cards(vec![(3, 2), (1,2), (5, 0), (9, 3)]),
+            folded: true,
+            total_bet: 8
+        });
+        players.insert(2, PlayerState {
+            chips: 0,
+            hand: make_cards(vec![(8,3), (7, 3), (6, 3), (5, 3)]),
+            folded: false,
+            total_bet: 12
+        });
+        players.insert(3, PlayerState {
+            chips: 0,
+            hand: make_cards(vec![(12, 0), (12, 1), (9, 1), (12, 3)]),
+            folded: false,
+            total_bet: 17
+        });
+        let community = make_cards(vec![(1, 1), (0, 2), (3, 3), (7, 0)]);
+
+        players.get_mut(&0).unwrap().hand = make_cards(vec![(0, 3), (9, 1), (0, 2), (9, 3), (1, 0)]);
+        let mut state = make_test_calc_winners_state(players);
+        state.community_cards = community.into_iter().map(|cs| cs.card).collect();
+        let result = calc_winners(&omaha_hold_em(), &state).totals();
+        let expected: HashMap<PlayerRole, Chips> = vec![(0, 54)].into_iter().collect();
         assert!(result == expected, "{:?} != {:?}", result, expected);
     }
 }
