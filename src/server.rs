@@ -189,13 +189,13 @@ impl GameServer {
             max_players: 4,
             starting_chips: 200,
             //variant_selector: PokerVariantSelector::Rotation(PokerVariants::all()),
-            //variant_selector: PokerVariantSelector::DealersChoice(PokerVariants::all()),
-            variant_selector: PokerVariantSelector::Rotation(PokerVariants {
-                descs: vec![PokerVariantDesc {
-                    name: "Five Card Draw".to_string()
-                }],
-                variants: vec![five_card_draw()]
-            }),
+            variant_selector: PokerVariantSelector::DealersChoice(PokerVariants::all()),
+            //variant_selector: PokerVariantSelector::Rotation(PokerVariants {
+                //descs: vec![PokerVariantDesc {
+                    //name: "Five Card Draw".to_string()
+                //}],
+                //variants: vec![five_card_draw()]
+            //}),
         };
         let static_files = StaticFiles::from_dir_path("ts/static");
         let table = Table::new(table_config, table_rules);
