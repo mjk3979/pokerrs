@@ -316,18 +316,20 @@ impl<P: Clone + Eq + Hash> Subpot<P> {
     }
 }
 
-fn calc_winners(state: &HandState) -> Winners<PlayerRole> {
+fn calc_winners(variant: &PokerVariant, state: &HandState) -> Winners<PlayerRole> {
     // calculate best hands for each player
     let best_hands: HashMap<PlayerRole, HandStrength> = state.players.iter().filter_map(|(&role, player)| {
         if player.folded {
             return None;
         }
         Some((role, {
-            let mut all_cards = state.community_cards;
-            for &cs in player.hand.iter() {
-                all_cards.push(cs.card);
-            }
-            best_hand(all_cards, 5)
+            combinations(&player.hand, variant.use_from_hand).into_iter().map(|combo| {
+                let mut all_cards = state.community_cards.clone();
+                for &cs in combo {
+                    all_cards.push(cs.card);
+                }
+                best_hand(all_cards, 5)
+            }).max().unwrap()
         }))
 
     }).collect();
@@ -457,7 +459,7 @@ pub async fn play_poker<'a>(variant: PokerVariant,
     Result<HashMap<PlayerRole, Chips>, PokerRoundError> {
     let mut state = HandState {
         deck: starting_deck,
-        rounds: variant.iter().cloned().rev().collect(),
+        rounds: variant.rules.iter().cloned().rev().collect(),
         cur_round: None,
         players: players.iter().map(|(&e, p)| (e, PlayerState{chips: p.chips, hand: Vec::new(), folded: false, total_bet: 0})).collect(),
         community_cards: CardTuple::new(),
@@ -499,7 +501,7 @@ pub async fn play_poker<'a>(variant: PokerVariant,
                     show_cards(&mut state.players, &mut viewdiffs, hand_last_bet, state.community_cards);
                     update_players(&players, &ids, &spectator_channel, &state, &viewdiffs, round);
                     viewdiffs.clear();
-                    let winners = calc_winners(&state);
+                    let winners = calc_winners(&variant, &state);
                     let mut retval = winners.totals();
                     for (&role, player) in &state.players {
                         *retval.entry(role).or_insert(0) -= player.total_bet;
@@ -1084,8 +1086,40 @@ mod test {
         });
 
         let mut state = make_test_calc_winners_state(players);
-        let result = calc_winners(&state).totals();
+        let result = calc_winners(&five_card_stud(), &state).totals();
         let expected: HashMap<PlayerRole, Chips> = vec![(2, 44), (3, 10)].into_iter().collect();
+        assert!(result == expected, "{:?} != {:?}", result, expected);
+
+        let mut players = HashMap::new();
+        players.insert(0, PlayerState {
+            chips: 0,
+            hand: make_cards(vec![(3, 0), (3,1), (0, 0), (9, 2), (1, 0)]),
+            folded: false,
+            total_bet: 17
+        });
+        players.insert(1, PlayerState {
+            chips: 0,
+            hand: make_cards(vec![(3, 2), (1,2), (5, 0), (9, 3), (7, 2)]),
+            folded: true,
+            total_bet: 8
+        });
+        players.insert(2, PlayerState {
+            chips: 0,
+            hand: make_cards(vec![(8,3), (7, 3), (6, 3), (5, 3), (4, 3)]),
+            folded: false,
+            total_bet: 12
+        });
+        players.insert(3, PlayerState {
+            chips: 0,
+            hand: make_cards(vec![(12, 0), (12, 1), (9, 1), (12, 3), (12, 2)]),
+            folded: false,
+            total_bet: 17
+        });
+
+        players.get_mut(&0).unwrap().hand = make_cards(vec![(0, 0), (0, 1), (0, 2), (0, 3), (1, 0)]);
+        let mut state = make_test_calc_winners_state(players);
+        let result = calc_winners(&five_card_stud(), &state).totals();
+        let expected: HashMap<PlayerRole, Chips> = vec![(2, 44), (0, 10)].into_iter().collect();
         assert!(result == expected, "{:?} != {:?}", result, expected);
     }
 }

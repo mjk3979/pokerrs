@@ -90,7 +90,11 @@ pub enum Round {
     }
 }
 
-pub type PokerVariant = Vec<Round>;
+#[derive(Clone)]
+pub struct PokerVariant {
+    pub rules: Vec<Round>,
+    pub use_from_hand: usize,
+}
 
 #[derive(Clone)]
 pub struct LivePlayer {
@@ -102,85 +106,129 @@ pub struct LivePlayer {
 pub fn texas_hold_em() -> PokerVariant {
     use Facing::*;
     use Round::*;
-    vec![
-        Ante,
-        DrawToHand{
-            facing: vec![FaceDown, FaceDown]
-        },
-        Bet {
-            starting_player: 1
-        },
-        DrawToCommunity {
-            quant: 3
-        },
-        Bet {
-            starting_player: 1
-        },
-        DrawToCommunity {
-            quant: 1
-        },
-        Bet {
-            starting_player: 1
-        },
-        DrawToCommunity {
-            quant: 1
-        },
-        Bet {
-            starting_player: 1
-        }
-    ]
+    PokerVariant {
+        rules: vec![
+            Ante,
+            DrawToHand{
+                facing: vec![FaceDown, FaceDown]
+            },
+            Bet {
+                starting_player: 1
+            },
+            DrawToCommunity {
+                quant: 3
+            },
+            Bet {
+                starting_player: 1
+            },
+            DrawToCommunity {
+                quant: 1
+            },
+            Bet {
+                starting_player: 1
+            },
+            DrawToCommunity {
+                quant: 1
+            },
+            Bet {
+                starting_player: 1
+            }
+        ],
+        use_from_hand: 2,
+    }
+}
+
+pub fn omaha_hold_em() -> PokerVariant {
+    use Facing::*;
+    use Round::*;
+    PokerVariant {
+        rules: vec![
+                Ante,
+                DrawToHand{
+                    facing: vec![FaceDown, FaceDown, FaceDown, FaceDown]
+                },
+                Bet {
+                    starting_player: 1
+                },
+                DrawToCommunity {
+                    quant: 3
+                },
+                Bet {
+                    starting_player: 1
+                },
+                DrawToCommunity {
+                    quant: 1
+                },
+                Bet {
+                    starting_player: 1
+                },
+                DrawToCommunity {
+                    quant: 1
+                },
+                Bet {
+                    starting_player: 1
+                }
+            ],
+        use_from_hand: 2,
+    }
 }
 
 pub fn five_card_stud() -> PokerVariant {
     use Facing::*;
     use Round::*;
-    vec![
-        Ante,
-        DrawToHand{
-            facing: vec![FaceDown, FaceDown, FaceDown, FaceDown, FaceDown]
-        },
-        Bet {
-            starting_player: 1
-        }
-    ]
+    PokerVariant {
+        rules: vec![
+            Ante,
+            DrawToHand{
+                facing: vec![FaceDown, FaceDown, FaceDown, FaceDown, FaceDown]
+            },
+            Bet {
+                starting_player: 1
+            }
+        ],
+        use_from_hand: 5,
+    }
 }
 
 pub fn seven_card_stud() -> PokerVariant {
     use Facing::*;
     use Round::*;
-    vec![
-        Ante,
-        DrawToHand{
-            facing: vec![FaceDown, FaceDown, FaceUp]
-        },
-        Bet {
-            starting_player: 1
-        },
-        DrawToHand{
-            facing: vec![FaceUp]
-        },
-        Bet {
-            starting_player: 1
-        },
-        DrawToHand {
-            facing: vec![FaceUp]
-        },
-        Bet {
-            starting_player: 1
-        },
-        DrawToHand {
-            facing: vec![FaceUp]
-        },
-        Bet {
-            starting_player: 1
-        },
-        DrawToHand {
-            facing: vec![FaceDown]
-        },
-        Bet {
-            starting_player: 1
-        },
-    ]
+    PokerVariant {
+        rules: vec![
+            Ante,
+            DrawToHand{
+                facing: vec![FaceDown, FaceDown, FaceUp]
+            },
+            Bet {
+                starting_player: 1
+            },
+            DrawToHand{
+                facing: vec![FaceUp]
+            },
+            Bet {
+                starting_player: 1
+            },
+            DrawToHand {
+                facing: vec![FaceUp]
+            },
+            Bet {
+                starting_player: 1
+            },
+            DrawToHand {
+                facing: vec![FaceUp]
+            },
+            Bet {
+                starting_player: 1
+            },
+            DrawToHand {
+                facing: vec![FaceDown]
+            },
+            Bet {
+                starting_player: 1
+            },
+        ],
+        use_from_hand: 5,
+    }
 }
 
 fn three_or_four_with_ace(player: &PlayerState) -> usize {
@@ -194,27 +242,36 @@ fn three_or_four_with_ace(player: &PlayerState) -> usize {
 pub fn five_card_draw() -> PokerVariant {
     use Facing::*;
     use Round::*;
-    vec![
-        Ante,
-        DrawToHand{
-            facing: vec![FaceDown; 5]
-        },
-        Bet {
-            starting_player: 1
-        },
-        Replace {
-            max_replace_fun: three_or_four_with_ace
-        },
-        Bet {
-            starting_player: 1
-        }
-    ]
+    PokerVariant {
+        rules: vec![
+            Ante,
+            DrawToHand{
+                facing: vec![FaceDown; 5]
+            },
+            Bet {
+                starting_player: 1
+            },
+            Replace {
+                max_replace_fun: three_or_four_with_ace
+            },
+            Bet {
+                starting_player: 1
+            }
+        ],
+        use_from_hand: 5,
+    }
 }
 
 impl PokerVariants {
     pub fn all() -> PokerVariants {
-        let descs = vec!["Texas Hold 'Em", "Seven Card Stud", "Five Card Stud", "Five Card Draw"].iter().map(|s| PokerVariantDesc{name: s.to_string()}).collect();
-        let variants = vec![texas_hold_em(), seven_card_stud(), five_card_stud(), five_card_draw()];
-        PokerVariants { descs, variants }
+        let all = vec![
+            ("Texas Hold 'Em", texas_hold_em()),
+            ("Omaha Hold 'Em", omaha_hold_em()),
+            ("Seven Card Stud", seven_card_stud()),
+            ("Five Card Stud", five_card_stud()),
+            ("Five Card Draw", five_card_draw())
+        ];
+        let (names, variants): (Vec<_>, Vec<_>) = all.into_iter().unzip();
+        PokerVariants { descs: names.into_iter().map(|name| PokerVariantDesc{name: name.to_string()}).collect(), variants }
     }
 }
