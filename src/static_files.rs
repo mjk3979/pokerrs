@@ -14,7 +14,7 @@ fn remove_root(root: &str, mut path: String) -> String {
     while retval.starts_with("/") || retval.starts_with("\\") {
         retval.remove(0);
     }
-    retval
+    str::replace(&retval, "\\", "/")
 }
 
 pub fn content_type(path: &str) -> &'static str {
