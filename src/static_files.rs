@@ -4,13 +4,14 @@ use std::fs;
 use std::io::Read;
 use std::path::PathBuf;
 
+#[derive(Debug)]
 pub struct StaticFiles {
     paths: HashMap<String, PathBuf>
 }
 
 fn remove_root(root: &str, mut path: String) -> String {
     let mut retval = path.split_off(root.len());
-    while retval.starts_with("/") {
+    while retval.starts_with("/") || retval.starts_with("\\") {
         retval.remove(0);
     }
     retval
