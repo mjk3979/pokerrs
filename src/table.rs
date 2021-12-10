@@ -1,4 +1,5 @@
 use crate::card::*;
+use crate::special_card::*;
 use crate::game::*;
 use crate::gamestate::*;
 use crate::viewstate::*;
@@ -164,6 +165,8 @@ impl TableState {
     }
 }
 
+pub type SpecialRules = Vec<SpecialCard>;
+
 impl Table {
     pub fn new(config: TableConfig, rules: TableRules, ante_rule: AnteRuleFn) -> Table {
         let state = TableState {
@@ -193,7 +196,7 @@ impl Table {
         }
     }
 
-    async fn get_next_variant(&self) -> (PokerVariant, PokerVariantDesc) {
+    async fn get_next_variant(&self) -> (PokerVariant, PokerVariantDesc, SpecialRules) {
         let (variant_state, dealer) = {
             let state = self.state.lock().unwrap();
             let variant_state = state.variant_state.clone();
@@ -211,12 +214,12 @@ impl Table {
                     let mut state = self.state.lock().unwrap();
                     state.variant_state = PokerVariantState::Rotation{variants, idx};
                 }
-                (retval, desc)
+                (retval, desc, Vec::new())
             },
             PokerVariantState::DealersChoice{variants} => {
-                let idx = dealer.input.dealers_choice(variants.descs.clone()).await;
+                let DealersChoiceResp{variant_idx: idx, special_cards} = dealer.input.dealers_choice(variants.descs.clone()).await;
                 let desc = variants.descs.get(idx).unwrap().clone();
-                (variants.variants.get(idx).unwrap().clone(), desc)
+                (variants.variants.get(idx).unwrap().clone(), desc, special_cards)
             },
         }
     }
@@ -247,7 +250,7 @@ impl Table {
             let mut rng = rand::thread_rng();
             deck.shuffle(&mut rng);
         }
-        let (variant, variant_desc) = self.get_next_variant().await;
+        let (variant, variant_desc, special_cards) = self.get_next_variant().await;
         {
             let mut state = self.state.lock().unwrap();
             state.running_variant = Some(variant_desc);
@@ -264,6 +267,7 @@ impl Table {
             players,
             Some(self.spectator_tx.clone()),
             rules,
+            special_cards,
             round,
             ).await {
             Ok(winners) => {

@@ -7,6 +7,7 @@ pub mod static_files;
 //pub mod owning_broadcast;
 pub mod card;
 pub mod bitcard;
+pub mod special_card;
 //mod hand;
 pub mod game;
 pub mod gamestate;

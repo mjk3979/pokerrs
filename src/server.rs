@@ -87,8 +87,8 @@ pub struct GameServerPlayerInputSource {
     bet_rx: watch::Receiver<Option<BetResp>>,
     replace_tx: watch::Sender<Option<ReplaceResp>>,
     replace_rx: watch::Receiver<Option<ReplaceResp>>,
-    dealers_choice_tx: watch::Sender<usize>,
-    dealers_choice_rx: watch::Receiver<usize>,
+    dealers_choice_tx: watch::Sender<DealersChoiceResp>,
+    dealers_choice_rx: watch::Receiver<DealersChoiceResp>,
 }
 
 impl GameServerPlayerInputSource {
@@ -97,7 +97,7 @@ impl GameServerPlayerInputSource {
         let (action_tx, action_rx) = watch::channel(None);
         let (bet_tx, bet_rx) = watch::channel(None);
         let (replace_tx, replace_rx) = watch::channel(None);
-        let (dealers_choice_tx, dealers_choice_rx) = watch::channel(0);
+        let (dealers_choice_tx, dealers_choice_rx) = watch::channel(DealersChoiceResp::default());
         GameServerPlayerInputSource {
             update_tx,
             update_rx,
@@ -153,7 +153,7 @@ impl PlayerInputSource for GameServerPlayerInputSource {
         }
     }
 
-    async fn dealers_choice(&self, variants: Vec<PokerVariantDesc>) -> usize {
+    async fn dealers_choice(&self, variants: Vec<PokerVariantDesc>) -> DealersChoiceResp {
         let mut rx = self.dealers_choice_rx.clone();
         rx.borrow_and_update();
         self.action_tx.send(Some(ServerActionRequest::DealersChoice {
@@ -431,7 +431,7 @@ impl GameServer {
             (&Method::POST, "/dealers_choice") => {
                 if let Some(player_id) = player_from_params(&params) {
                     if let Some(conn) = self.get_player(player_id) {
-                        if let Ok(resp) = serde_json::from_slice::<usize>(&hyper::body::to_bytes(req.into_body()).await.unwrap()) {
+                        if let Ok(resp) = serde_json::from_slice::<DealersChoiceResp>(&hyper::body::to_bytes(req.into_body()).await.unwrap()) {
                             conn.dealers_choice_tx.send(resp);
                         } else {
                             println!("Failed to parse request");

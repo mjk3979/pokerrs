@@ -1,4 +1,4 @@
-import {ServerUpdate, ServerActionRequest, PokerViewState, PlayerViewState, TableViewState, CardViewState} from "./pokerrs.ts";
+import {ServerUpdate, ServerActionRequest, SpecialCardType, DealersChoiceResp, PokerViewState, PlayerViewState, TableViewState, CardViewState} from "./pokerrs.ts";
 
 function api<T>(url: string): Promise<T> {
   return fetch(url)
@@ -411,6 +411,8 @@ function reset_input() {
 function dealers_choice(idx: number) {
     const player_input = document.getElementById("name_input");
     const player_id = (<HTMLInputElement>player_input).value.trim();
+    const two_wild = (<HTMLInputElement>document.getElementById("two_wild")).checked;
+    const king_axe = (<HTMLInputElement>document.getElementById("king_axe")).checked;
     const dealers_choice_list = <HTMLElement>document.getElementById("dealers_choice_list");
     let revert = () => {
         for (const element of dealers_choice_list.getElementsByClassName("dealers_choice_button")) {
@@ -420,9 +422,28 @@ function dealers_choice(idx: number) {
     for (const element of dealers_choice_list.getElementsByClassName("dealers_choice_button")) {
         (<HTMLElement>element).setAttribute("disabled", "");
     }
+    let special_cards = [];
+    if (two_wild) {
+        for (let suit=0; suit<4; suit+=1) {
+            special_cards.push({
+                wtype: <SpecialCardType>"Wild",
+                card: {rank: 1, suit: suit}
+            });
+        }
+    }
+    if (king_axe) {
+        special_cards.push({
+            wtype: <SpecialCardType>"WinsItAll",
+            card: {rank: 12, suit: 2}
+        });
+    }
+    let resp: DealersChoiceResp = {
+        variant_idx: idx,
+        special_cards: special_cards,
+    };
     fetch(`/dealers_choice?player=${player_id}`, {
         method: "POST",
-        body: JSON.stringify(idx)
+        body: JSON.stringify(resp)
     }).then(resp => {
         if (resp.ok) {
             reset_input();
