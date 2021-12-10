@@ -154,8 +154,12 @@ impl PlayerInputSource for CmdlineInputSource {
         }
     }
 
-    async fn dealers_choice(&self, variants: Vec<PokerVariantDesc>) -> usize {
-        self.menu(&variants.iter().map(|v| &v.name as &str).enumerate().collect::<Vec<_>>()[..])
+    async fn dealers_choice(&self, variants: Vec<PokerVariantDesc>) -> DealersChoiceResp {
+        let variant_idx = self.menu(&variants.iter().map(|v| &v.name as &str).enumerate().collect::<Vec<_>>()[..]);
+        DealersChoiceResp {
+            variant_idx,
+            special_cards: Vec::new(),
+        }
     }
 
     fn update(&self, update: PokerViewUpdate) {

@@ -214,7 +214,7 @@ impl Table {
                 (retval, desc)
             },
             PokerVariantState::DealersChoice{variants} => {
-                let idx = dealer.input.dealers_choice(variants.descs.clone()).await;
+                let DealersChoiceResp{variant_idx: idx, special_cards} = dealer.input.dealers_choice(variants.descs.clone()).await;
                 let desc = variants.descs.get(idx).unwrap().clone();
                 (variants.variants.get(idx).unwrap().clone(), desc)
             },

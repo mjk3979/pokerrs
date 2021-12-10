@@ -1,4 +1,5 @@
 use crate::card::*;
+use crate::special_card::*;
 use crate::viewstate::*;
 use crate::gamestate::PlayerState;
 
@@ -65,11 +66,18 @@ pub struct PokerVariants {
     pub variants: Vec<PokerVariant>,
 }
 
+#[derive(Clone, Serialize, Deserialize)]
+#[derive(TS)]
+pub struct DealersChoiceResp {
+    pub variant_idx: usize,
+    pub special_cards: Vec<SpecialCard>,
+}
+
 #[async_trait]
 pub trait PlayerInputSource: Send + Sync {
     async fn bet(&self, call_amount: Chips, min_bet: Chips) -> BetResp;
     async fn replace(&self, max_can_replace: usize) -> ReplaceResp;
-    async fn dealers_choice(&self, variants: Vec<PokerVariantDesc>) -> usize;
+    async fn dealers_choice(&self, variants: Vec<PokerVariantDesc>) -> DealersChoiceResp;
     fn update(&self, viewstate: PokerViewUpdate);
 }
 
@@ -273,5 +281,14 @@ impl PokerVariants {
         ];
         let (names, variants): (Vec<_>, Vec<_>) = all.into_iter().unzip();
         PokerVariants { descs: names.into_iter().map(|name| PokerVariantDesc{name: name.to_string()}).collect(), variants }
+    }
+}
+
+impl DealersChoiceResp {
+    pub fn default() -> DealersChoiceResp {
+        DealersChoiceResp {
+            variant_idx: 0,
+            special_cards: Vec::new(),
+        }
     }
 }

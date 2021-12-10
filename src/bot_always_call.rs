@@ -32,8 +32,12 @@ impl PlayerInputSource for BotAlwaysCallInputSource {
         Vec::new()
     }
 
-    async fn dealers_choice(&self, variants: Vec<PokerVariantDesc>) -> usize {
-        0
+    async fn dealers_choice(&self, variants: Vec<PokerVariantDesc>) -> DealersChoiceResp {
+        let variant_idx = 0;
+        DealersChoiceResp {
+            variant_idx,
+            special_cards: Vec::new(),
+        }
     }
 
     fn update(&self, update: PokerViewUpdate) {

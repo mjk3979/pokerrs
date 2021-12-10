@@ -1,5 +1,6 @@
 use crate::bitcard::*;
 use crate::card::*;
+use crate::special_card::*;
 use crate::game::*;
 use crate::gamestate::*;
 use crate::table::*;
@@ -34,6 +35,9 @@ export! {
     Kind,
     ServerActionRequest,
     ServerPlayer,
-    ServerUpdate
+    ServerUpdate,
+    SpecialCardType,
+    SpecialCard,
+    DealersChoiceResp
     => "ts/pokerrs.ts",
 }
