@@ -6,7 +6,7 @@ use ts_rs::{TS, export};
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[derive(TS)]
 pub enum SpecialCardType {
-    Special,
+    Wild,
     TakesAll,
 }
 
