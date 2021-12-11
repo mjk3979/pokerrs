@@ -1,4 +1,5 @@
 use crate::card::*;
+use crate::special_card::*;
 use crate::game::*;
 use crate::table::*;
 use crate::comb::*;
@@ -204,7 +205,7 @@ fn explode_aces(cards: CardTuple) -> CardTuple {
     retval
 }
 
-pub fn best_hand(cards: CardTuple, hand_size: usize) -> HandStrength {
+pub fn best_hand(cards: CardTuple, hand_size: usize, rules: &SpecialRules) -> HandStrength {
     let all_cards = explode_aces(cards);
     combinations(all_cards.iter(), hand_size).into_iter().filter_map(|v|{
         let combo: CardTuple = v.into_iter().collect();
@@ -218,6 +219,11 @@ pub fn best_hand(cards: CardTuple, hand_size: usize) -> HandStrength {
                     ace_suits |= (1 << suit);
                 }
             }
+        }
+        let mut to_try = vec![combo];
+        for card in combo.iter() {
+            for rule in rules {
+                if let SpecialCardType::Wild
         }
         Some(HandStrength::new(combo, hand_size))
     }).max().unwrap()
@@ -316,19 +322,31 @@ impl<P: Clone + Eq + Hash> Subpot<P> {
     }
 }
 
-fn calc_winners(variant: &PokerVariant, state: &HandState) -> Winners<PlayerRole> {
+fn calc_winners(variant: &PokerVariant, state: &HandState, rules: &SpecialRules) -> Winners<PlayerRole> {
     // calculate best hands for each player
     let best_hands: HashMap<PlayerRole, HandStrength> = state.players.iter().filter_map(|(&role, player)| {
         if player.folded {
             return None;
         }
+        
+        for rule in rules {
+            if rule.wtype == SpecialCardType::WinsItAll {
+                if let Some(_) = player.hand.iter().find(|cs| cs.card == rule.card) {
+                    return Some((role, HandStrength {
+                        kind: Kind::WinsItAll,
+                        kickers: RankTuple::new(),
+                    }));
+                }
+            }
+        }
+
         Some((role, {
             combinations(&player.hand, variant.use_from_hand).into_iter().map(|combo| {
                 let mut all_cards = state.community_cards.clone();
                 for &cs in combo {
                     all_cards.push(cs.card);
                 }
-                best_hand(all_cards, 5)
+                best_hand(all_cards, 5, rules)
             }).max().unwrap()
         }))
 
@@ -415,7 +433,13 @@ fn update_players<'a, 'b, 'c, 'd, 'e>(players: &'b HashMap<PlayerRole, LivePlaye
     }
 }
 
-pub fn show_cards(variant: &PokerVariant, players: &mut HashMap<PlayerRole, PlayerState>, viewdiffs: &mut Vec<PokerGlobalViewDiff<PlayerRole>>, last_bet: Option<PlayerRole>, community_cards: CardTuple) {
+pub fn show_cards(variant: &PokerVariant,
+    players: &mut HashMap<PlayerRole, PlayerState>,
+    viewdiffs: &mut Vec<PokerGlobalViewDiff<PlayerRole>>,
+    last_bet: Option<PlayerRole>,
+    community_cards: CardTuple,
+    rules: &SpecialRules,
+    ){
     // last best and then to the left
     let starting = last_bet.unwrap_or(0); // todo who actually goes first?
     let num_players = players.len();
@@ -435,7 +459,7 @@ pub fn show_cards(variant: &PokerVariant, players: &mut HashMap<PlayerRole, Play
                 for &cs in combo {
                     all_cards.push(cs.card);
                 }
-                best_hand(all_cards, 5)
+                best_hand(all_cards, 5, rules)
             }).max().unwrap();
             viewdiffs.push(PokerGlobalViewDiff::Common(PokerViewDiff::ShowCards {
                 player: role,
@@ -456,6 +480,7 @@ pub async fn play_poker<'a>(variant: PokerVariant,
     players: HashMap<PlayerRole, LivePlayer>,
     spectator_channel: Option<fold_channel::Sender<Vec<PokerGlobalViewDiff<PlayerId>>, Vec<PokerGlobalViewDiff<PlayerId>>>>,
     table_rules: TableRules,
+    rules: SpecialRules,
     round: usize
     ) ->
     Result<HashMap<PlayerRole, Chips>, PokerRoundError> {
@@ -500,10 +525,10 @@ pub async fn play_poker<'a>(variant: PokerVariant,
                 } else if let Some(next_round) = state.rounds.pop() {
                     state.cur_round = Some(RoundState::new(&next_round));
                 } else {
-                    show_cards(&variant, &mut state.players, &mut viewdiffs, hand_last_bet, state.community_cards);
+                    show_cards(&variant, &mut state.players, &mut viewdiffs, hand_last_bet, state.community_cards, &rules);
                     update_players(&players, &ids, &spectator_channel, &state, &viewdiffs, round);
                     viewdiffs.clear();
-                    let winners = calc_winners(&variant, &state);
+                    let winners = calc_winners(&variant, &state, &rules);
                     let mut retval = winners.totals();
                     for (&role, player) in &state.players {
                         *retval.entry(role).or_insert(0) -= player.total_bet;
@@ -751,7 +776,7 @@ mod test {
     #[test]
     fn test_best_hand_high_card() {
         let cards: CardTuple = vec![4, 2, 7, 5, 9].into_iter().enumerate().map(|(i, rank)| Card{rank, suit: Suit(i%4)}).collect();
-        let result = best_hand(cards, 5);
+        let result = best_hand(cards, 5, &vec![]);
         let expected = HandStrength{
             kind: Kind::HighCard(9),
             kickers: vec![7, 5, 4, 2].into()
@@ -762,7 +787,7 @@ mod test {
     #[test]
     fn test_best_hand_high_card_ace() {
         let cards: CardTuple = vec![4, 2, 0, 5, 9].into_iter().enumerate().map(|(i, rank)| Card{rank, suit: Suit(i%4)}).collect();
-        let result = best_hand(cards, 5);
+        let result = best_hand(cards, 5, &vec![]);
         let expected = HandStrength{
             kind: Kind::HighCard(NUM_RANKS),
             kickers: vec![9, 5, 4, 2].into()
@@ -773,7 +798,7 @@ mod test {
     #[test]
     fn test_best_hand_pair() {
         let cards: CardTuple = vec![4, 2, 1, 4, 9].into_iter().enumerate().map(|(i, rank)| Card{rank, suit: Suit(i%4)}).collect();
-        let result = best_hand(cards, 5);
+        let result = best_hand(cards, 5, &vec![]);
         let expected = HandStrength{
             kind: Kind::Pair(4),
             kickers: vec![9, 2, 1].into()
@@ -784,7 +809,7 @@ mod test {
     #[test]
     fn test_best_hand_pair_ace_not_in_pair() {
         let cards: CardTuple = vec![4, 0, 1, 4, 9].into_iter().enumerate().map(|(i, rank)| Card{rank, suit: Suit(i%4)}).collect();
-        let result = best_hand(cards, 5);
+        let result = best_hand(cards, 5, &vec![]);
         let expected = HandStrength{
             kind: Kind::Pair(4),
             kickers: vec![NUM_RANKS, 9, 1].into()
@@ -795,7 +820,7 @@ mod test {
     #[test]
     fn test_best_hand_pair_ace_in_pair() {
         let cards: CardTuple = vec![0, 2, 1, 0, 4].into_iter().enumerate().map(|(i, rank)| Card{rank, suit: Suit(i%4)}).collect();
-        let result = best_hand(cards, 5);
+        let result = best_hand(cards, 5, &vec![]);
         let expected = HandStrength{
             kind: Kind::Pair(NUM_RANKS),
             kickers: vec![4, 2, 1].into()
@@ -806,7 +831,7 @@ mod test {
     #[test]
     fn test_best_hand_two_pair() {
         let cards: CardTuple = vec![4, 2, 1, 4, 2].into_iter().enumerate().map(|(i, rank)| Card{rank, suit: Suit(i%4)}).collect();
-        let result = best_hand(cards, 5);
+        let result = best_hand(cards, 5, &vec![]);
         let expected = HandStrength{
             kind: Kind::TwoPair{high: 4, low: 2},
             kickers: vec![1].into()
@@ -817,7 +842,7 @@ mod test {
     #[test]
     fn test_best_hand_two_pair_ace_not_in_two_pair() {
         let cards: CardTuple = vec![4, 2, 0, 4, 2].into_iter().enumerate().map(|(i, rank)| Card{rank, suit: Suit(i%4)}).collect();
-        let result = best_hand(cards, 5);
+        let result = best_hand(cards, 5, &vec![]);
         let expected = HandStrength{
             kind: Kind::TwoPair{high: 4, low: 2},
             kickers: vec![NUM_RANKS].into()
@@ -828,7 +853,7 @@ mod test {
     #[test]
     fn test_best_hand_two_pair_ace_in_two_pair() {
         let cards: CardTuple = vec![4, 0, 1, 4, 0].into_iter().enumerate().map(|(i, rank)| Card{rank, suit: Suit(i%4)}).collect();
-        let result = best_hand(cards, 5);
+        let result = best_hand(cards, 5, &vec![]);
         let expected = HandStrength{
             kind: Kind::TwoPair{high: NUM_RANKS, low: 4},
             kickers: vec![1].into()
@@ -839,7 +864,7 @@ mod test {
     #[test]
     fn test_best_hand_three_kind() {
         let cards: CardTuple = vec![4, 4, 1, 4, 2].into_iter().enumerate().map(|(i, rank)| Card{rank, suit: Suit(i%4)}).collect();
-        let result = best_hand(cards, 5);
+        let result = best_hand(cards, 5, &vec![]);
         let expected = HandStrength{
             kind: Kind::ThreeKind(4),
             kickers: vec![2, 1].into()
@@ -850,7 +875,7 @@ mod test {
     #[test]
     fn test_best_hand_three_kind_ace_not_in_three_kind() {
         let cards: CardTuple = vec![4, 4, 0, 4, 2].into_iter().enumerate().map(|(i, rank)| Card{rank, suit: Suit(i%4)}).collect();
-        let result = best_hand(cards, 5);
+        let result = best_hand(cards, 5, &vec![]);
         let expected = HandStrength{
             kind: Kind::ThreeKind(4),
             kickers: vec![NUM_RANKS, 2].into()
@@ -861,7 +886,7 @@ mod test {
     #[test]
     fn test_best_hand_three_kind_ace_in_three_kind() {
         let cards: CardTuple = vec![0, 0, 1, 0, 4].into_iter().enumerate().map(|(i, rank)| Card{rank, suit: Suit(i%4)}).collect();
-        let result = best_hand(cards, 5);
+        let result = best_hand(cards, 5, &vec![]);
         let expected = HandStrength{
             kind: Kind::ThreeKind(NUM_RANKS),
             kickers: vec![4, 1].into()
@@ -1088,7 +1113,7 @@ mod test {
         });
 
         let mut state = make_test_calc_winners_state(players);
-        let result = calc_winners(&five_card_stud(), &state).totals();
+        let result = calc_winners(&five_card_stud(), &state, &vec![]).totals();
         let expected: HashMap<PlayerRole, Chips> = vec![(2, 44), (3, 10)].into_iter().collect();
         assert!(result == expected, "{:?} != {:?}", result, expected);
 
@@ -1120,7 +1145,7 @@ mod test {
 
         players.get_mut(&0).unwrap().hand = make_cards(vec![(0, 0), (0, 1), (0, 2), (0, 3), (1, 0)]);
         let mut state = make_test_calc_winners_state(players);
-        let result = calc_winners(&five_card_stud(), &state).totals();
+        let result = calc_winners(&five_card_stud(), &state, &vec![]).totals();
         let expected: HashMap<PlayerRole, Chips> = vec![(2, 44), (0, 10)].into_iter().collect();
         assert!(result == expected, "{:?} != {:?}", result, expected);
     }
@@ -1157,7 +1182,7 @@ mod test {
         players.get_mut(&0).unwrap().hand = make_cards(vec![(0, 3), (9, 1), (0, 2), (9, 3), (1, 0)]);
         let mut state = make_test_calc_winners_state(players);
         state.community_cards = community.into_iter().map(|cs| cs.card).collect();
-        let result = calc_winners(&omaha_hold_em(), &state).totals();
+        let result = calc_winners(&omaha_hold_em(), &state, &vec![]).totals();
         let expected: HashMap<PlayerRole, Chips> = vec![(0, 54)].into_iter().collect();
         assert!(result == expected, "{:?} != {:?}", result, expected);
     }

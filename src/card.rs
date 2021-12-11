@@ -33,6 +33,7 @@ pub enum Kind {
     },
     FourKind(StrengthRank),
     StraightFlush(StrengthRank),
+    WinsItAll,
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Ord, PartialOrd, Eq, Hash, TS)]
@@ -63,7 +64,8 @@ impl std::fmt::Display for Kind {
             Flush(cards) => write!(f, "Flush, {} high", rank_name(&cards.get(0)))?,
             FullHouse{high, low} => write!(f, "Full House {}s over {}s", rank_name(high), rank_name(low))?,
             FourKind(r) => write!(f, "Four {}s", rank_name(r))?,
-            StraightFlush(r) => write!(f, "Straight Flush, {} high", rank_name(r))?
+            StraightFlush(r) => write!(f, "Straight Flush, {} high", rank_name(r))?,
+            WinsItAll => write!(f, "Wins It All")?,
             //_ => panic!("")
         }
         Ok(())
