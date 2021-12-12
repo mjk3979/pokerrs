@@ -1,6 +1,8 @@
 #[derive(Clone)]
 pub struct Combinations<T, It> {
     p: usize,
+    replacement: bool,
+    src: It,
     stack: Vec<It>,
     combo: Vec<T>,
 }
@@ -8,15 +10,27 @@ pub struct Combinations<T, It> {
 pub fn combinations<T: Clone, I, It: Iterator<Item=T> + Clone>(src: I, p: usize) -> Combinations<T, It>
     where I: IntoIterator<Item = T, IntoIter=It>
 {
-    assert!(p > 0);
-    let stack: Vec<_> = vec![src.into_iter()];
+    let src = src.into_iter();
+    let stack: Vec<_> = vec![src.clone()];
     let combo = Vec::new();
-    Combinations {p, stack, combo}
+    Combinations {p, replacement: false, src, stack, combo}
+}
+
+pub fn combinations_with_replacement<T: Clone, I, It: Iterator<Item=T> + Clone>(src: I, p: usize) -> Combinations<T, It>
+    where I: IntoIterator<Item = T, IntoIter=It>
+{
+    let src = src.into_iter();
+    let stack: Vec<_> = vec![src.clone()];
+    let combo = Vec::new();
+    Combinations {p, replacement: true, src, stack, combo}
 }
 
 impl<T: Clone, It: Iterator<Item=T> + Clone> Iterator for Combinations<T, It> {
     type Item = Vec<T>;
     fn next(&mut self) -> Option<Self::Item> {
+        if self.p == 0 {
+            return None;
+        }
         if self.combo.len() == self.p {
             self.combo.pop();
         }
@@ -28,7 +42,11 @@ impl<T: Clone, It: Iterator<Item=T> + Clone> Iterator for Combinations<T, It> {
                     return Some(self.combo.clone());
                 } else {
                     self.stack.push(iter.clone());
-                    self.stack.push(iter);
+                    if self.replacement {
+                        self.stack.push(self.src.clone());
+                    } else {
+                        self.stack.push(iter);
+                    }
                 }
             } else {
                 if !self.combo.is_empty() {
@@ -43,7 +61,7 @@ impl<T: Clone, It: Iterator<Item=T> + Clone> Iterator for Combinations<T, It> {
 mod test {
 
 use crate::frozen::FrozenSet;
-use crate::comb::combinations;
+use crate::comb::*;
 
 #[test]
 fn test_combinations_empty() {
@@ -69,6 +87,21 @@ fn test_combinations_small() {
         vec![5, 7],
         vec![5, 11],
         vec![7,11]
+    ].into_iter().map(|v| v.into_iter().collect()).collect();
+    assert!(combos == expected);
+}
+
+#[test]
+fn test_combinations_with_replacement() {
+    let lst: Vec<u64> = vec![2, 3, 5];
+    let combos: FrozenSet<FrozenSet<u64>>  = combinations_with_replacement(&lst, 2).into_iter().map(|v| v.into_iter().copied().collect()).collect();
+    let expected: FrozenSet<FrozenSet<u64>> = vec![
+        vec![2, 2],
+        vec![2, 3],
+        vec![2, 5],
+        vec![3, 3],
+        vec![3, 5],
+        vec![5, 5],
     ].into_iter().map(|v| v.into_iter().collect()).collect();
     assert!(combos == expected);
 }

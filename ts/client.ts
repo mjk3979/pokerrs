@@ -1,4 +1,4 @@
-import {ServerUpdate, ServerActionRequest, PokerViewState, PlayerViewState, TableViewState, CardViewState} from "./pokerrs.ts";
+import {ServerUpdate, ServerActionRequest, SpecialCardType, DealersChoiceResp, PokerViewState, PlayerViewState, TableViewState, CardViewState} from "./pokerrs.ts";
 
 function api<T>(url: string): Promise<T> {
   return fetch(url)
@@ -426,18 +426,18 @@ function dealers_choice(idx: number) {
     if (two_wild) {
         for (let suit=0; suit<4; suit+=1) {
             special_cards.push({
-                wtype: "Wild",
+                wtype: <SpecialCardType>"Wild",
                 card: {rank: 1, suit: suit}
             });
         }
     }
     if (king_axe) {
         special_cards.push({
-            wtype: "TakesAll",
+            wtype: <SpecialCardType>"WinsItAll",
             card: {rank: 12, suit: 2}
         });
     }
-    let resp = {
+    let resp: DealersChoiceResp = {
         variant_idx: idx,
         special_cards: special_cards,
     };
