@@ -414,12 +414,18 @@ fn collect_ante_from_players(rule: &AnteRule, players: &mut HashMap<PlayerRole, 
             }
         }
         Blinds(blinds) => {
-            for &Blind{player: blind_role, amount} in blinds {
+            let mut blind_starting_player = 0;
+            if players.values().filter(|p| p.chips > 0).count() > 2 {
+                blind_starting_player = 1;
+            }
+            let mut blind_role = blind_starting_player;
+            for &Blind{amount} in blinds {
                 let player = players.get_mut(&blind_role).unwrap();
                 let chips = player.chips;
                 let to_collect = std::cmp::min(chips, amount);
                 player.total_bet += to_collect;
                 viewdiffs.push(PokerGlobalViewDiff::Common(PokerViewDiff::from_blind_name(to_collect, blind_role, "blind".to_string())));
+                blind_role = next_player(blind_role, players.len());
             }
         }
     }

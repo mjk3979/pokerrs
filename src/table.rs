@@ -18,7 +18,6 @@ use std::time::Duration;
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub struct Blind {
-    pub player: PlayerRole,
     pub amount: Chips
 }
 
@@ -28,7 +27,7 @@ pub enum AnteRule {
     Blinds(Vec<Blind>)
 }
 
-pub type AnteRuleFn = fn (round: usize) -> AnteRule;
+pub type AnteRuleFn = dyn Send + (Fn(usize, Duration) -> AnteRule);
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TableRules {
@@ -56,7 +55,6 @@ pub enum PokerVariantState {
         variants: PokerVariants,
     }
 }
-
 struct TableState {
     players: HashMap<PlayerId, LivePlayer>,
     seats: BTreeMap<Seat, PlayerId>,
@@ -66,6 +64,9 @@ struct TableState {
     current_log_start: usize,
     variant_state: PokerVariantState,
     running_variant: Option<PokerVariantDesc>,
+    start_time: std::time::Instant,
+    past_time: Duration,
+    ante_rule: Box<AnteRuleFn>,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -94,7 +95,6 @@ pub struct Table {
     pub spectator_rx: fold_channel::Receiver<Vec<PokerGlobalViewDiff<PlayerId>>>,
     table_view_tx: watch::Sender<TableViewState>,
     pub table_view_rx: watch::Receiver<TableViewState>,
-    ante_rule: AnteRuleFn,
 }
 
 pub enum JoinError {
@@ -168,7 +168,8 @@ impl TableState {
 pub type SpecialRules = Vec<SpecialCard>;
 
 impl Table {
-    pub fn new(config: TableConfig, rules: TableRules, ante_rule: AnteRuleFn) -> Table {
+    pub fn new(config: TableConfig, rules: TableRules, ante_rule: Box<AnteRuleFn>) -> Table {
+        let start_time = std::time::Instant::now();
         let state = TableState {
             players: HashMap::new(),
             seats: BTreeMap::new(),
@@ -178,6 +179,9 @@ impl Table {
             old_logs: Vec::new(),
             variant_state: config.variant_selector.clone().into(),
             running_variant: None,
+            start_time,
+            past_time: std::time::Duration::from_secs(0),
+            ante_rule,
         };
         let (running_tx, running_rx) = watch::channel(false);
         let (spectator_tx, spectator_rx) = fold_channel::channel(Vec::new(), |v, t: Vec<PokerGlobalViewDiff<PlayerId>>| v.extend_from_slice(&t));
@@ -192,7 +196,6 @@ impl Table {
             spectator_rx,
             table_view_tx,
             table_view_rx,
-            ante_rule,
         }
     }
 
@@ -224,6 +227,14 @@ impl Table {
         }
     }
 
+    fn server_uptime(&self) -> Duration {
+        {
+            let state = self.state.lock().unwrap();
+            let now = std::time::Instant::now();
+            (now - state.start_time) + state.past_time
+        }
+    }
+
     pub async fn next_round(&self) -> bool {
         {
             loop {
@@ -250,18 +261,19 @@ impl Table {
             let mut rng = rand::thread_rng();
             deck.shuffle(&mut rng);
         }
+        let mut rules = self.rules.clone();
         let (variant, variant_desc, special_cards) = self.get_next_variant().await;
         {
             let mut state = self.state.lock().unwrap();
             state.running_variant = Some(variant_desc);
             self.table_view_tx.send(self.viewstate(&state));
+
+            rules.ante = (state.ante_rule)(round, self.server_uptime());
+            rules.min_bet = match &rules.ante {
+                AnteRule::Ante(ante) => *ante,
+                AnteRule::Blinds(blinds) => blinds.iter().map(|b| b.amount).max().unwrap(),
+            };
         }
-        let mut rules = self.rules.clone();
-        rules.ante = (self.ante_rule)(round);
-        rules.min_bet = match &rules.ante {
-            AnteRule::Ante(ante) => *ante,
-            AnteRule::Blinds(blinds) => blinds.iter().map(|b| b.amount).max().unwrap(),
-        };
         match play_poker(variant,
             Mutex::new(deck),
             players,
@@ -324,10 +336,21 @@ impl Table {
 
     pub fn start(&self) {
         self.running_tx.send(true);
+        {
+            let mut state = self.state.lock().unwrap();
+            state.start_time = std::time::Instant::now();
+        }
     }
 
     pub fn stop(&self) {
+        let was_running = self.running_rx.borrow();
         self.running_tx.send(false);
+        if *was_running {
+            let mut state = self.state.lock().unwrap();
+            let now = std::time::Instant::now();
+            let start_time = state.start_time;
+            state.past_time += now - start_time;
+        }
     }
 
     fn viewstate(&self, state: &TableState) -> TableViewState {
