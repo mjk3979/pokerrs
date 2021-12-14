@@ -21,7 +21,7 @@ use hyper::header::HeaderValue;
 use url::Url;
 use url::form_urlencoded::parse;
 
-use std::collections::HashMap;
+use std::collections::{HashMap, BTreeMap};
 use std::sync::{Mutex, Condvar, RwLock, Arc};
 use std::future::Future;
 use std::pin::Pin;
@@ -101,7 +101,7 @@ pub struct GameServerTable {
 }
 
 pub struct GameServer {
-    tables: Mutex<HashMap<TableId, Arc<GameServerTable>>>,
+    tables: Mutex<BTreeMap<TableId, Arc<GameServerTable>>>,
     static_files: StaticFiles,
     //log_update_channel_t: fold_channel::Sender<Vec<PokerGlobalViewDiff>>
 }
@@ -217,7 +217,7 @@ impl GameServer {
         let server = Arc::new({
             //let (log_update_channel_t, log_update_channel_r) = watch::channel(());
             GameServer {
-                tables: Mutex::new(HashMap::new()),
+                tables: Mutex::new(BTreeMap::new()),
                 static_files,
                 //log_update_channel_t: spectator_tx.clone()
             }
@@ -319,7 +319,27 @@ impl GameServer {
     }
 
     fn create_table(&self, params: &HashMap<String, String>) -> Result<TableId, String> {
-        Err("Unimplemented".to_string())
+        if let Some(table_config) = params.get("table_config").map(|s| serde_json::from_str::<TableConfig>(s).ok()).flatten() {
+            if let Some(ante_rule) = params.get("ante_rule").map(|s| serde_json::from_str::<AnteRuleDesc>(s).ok()).flatten() {
+                let gametable = Arc::new({
+                    let starting_rules = ante_rule.starting_rules();
+                    let table = Table::new(table_config, starting_rules, ante_rule.rule_fn());
+                    let players = Mutex::new(HashMap::new());
+                    let log_update_channel_r = table.spectator_rx.clone();
+                    let bots = Mutex::new(Vec::new());
+                    GameServerTable { table, players, log_update_channel_r, bots }
+                });
+
+                let mut tables = self.tables.lock().unwrap();
+                let table_id = tables.keys().max().copied().map(|tid| tid+1).unwrap_or(0);
+                tables.insert(table_id, gametable);
+                Ok(table_id)
+            } else {
+                Err("Invalid ante rule desc".to_string())
+            }
+        } else {
+            Err("Invalid table config".to_string())
+        }
     }
 
     pub async fn serve(&self, req: Request<Body>) -> Result<Response<Body>, Infallible> {
@@ -510,14 +530,26 @@ impl GameServer {
 }
 
 impl AnteRuleDesc {
-    pub fn rule_fn(&self) -> Arc<AnteRuleFn> {
+    pub fn starting_rules(&self) -> TableRules {
+        let starting_bet = (*self.rule_fn())(0, std::time::Duration::from_secs(0));
+        TableRules {
+            ante: starting_bet.clone(),
+            ante_name: (if self.blinds {"Ante"} else {"Blind"}).to_string(),
+            min_bet: match starting_bet {
+                AnteRule::Ante(ante) => ante,
+                AnteRule::Blinds(blinds) => blinds.iter().map(|b| b.amount).max().unwrap(),
+            }
+        }
+    }
+
+    pub fn rule_fn(&self) -> Box<AnteRuleFn> {
         use AnteRuleChangeDesc::*;
 
         let starting_chips: Chips = self.starting_value;
         let change: AnteRuleChangeDesc = self.change;
         let blinds = self.blinds;
 
-        Arc::new(move |round, server_uptime| {
+        Box::new(move |round, server_uptime| {
             let low_blind = match change {
                 Constant => {
                     starting_chips
