@@ -90,7 +90,7 @@
         </div>
     </div>
     <div id="table_settings_modal" class="modal_container center">
-        <div class="vlist modal">
+        <div class="vlist modal biggap">
             <div class="marth biggap hfill">
                 <label for="max_players_input" class="settings_label">
                     Max Number of Players
@@ -103,20 +103,22 @@
                 </label>
                 <input name="starting_chips_input" id="starting_chips_input" type="number" min="1" value="1000" />
             </div>
-            <span class="settings_label">Game</span>
-            <div class="biggap marth">
-                <label>
-                    Dealer's Choice
-                    <input type="radio" name="game" value="dealers_choice" />
-                </label>
-                <label>
-                    Rotation
-                    <input type="radio" name="game" value="rotation" />
-                </label>
-                <label>
-                    Single Variant
-                    <input type="radio" name="game" value="single" />
-                </label>
+            <div class="vlist">
+                <span class="settings_label">Game</span>
+                <div class="biggap marth">
+                    <label>
+                        Dealer's Choice
+                        <input type="radio" name="game" value="dealers_choice" />
+                    </label>
+                    <label>
+                        Rotation
+                        <input type="radio" name="game" value="rotation" />
+                    </label>
+                    <label>
+                        Single Variant
+                        <input type="radio" name="game" value="single" />
+                    </label>
+                </div>
             </div>
             <div id="variant_list_div" class="biggap marth">
                 <div class="vlist">
@@ -131,8 +133,10 @@
                         </datalist>
                     </select>
                 </div>
-                <div class="calign evenspace">
-                    <input type="button" 
+                <div class="spaced_list">
+                    <input type="button" style="width: 100%;" value="Add >>>" />
+                    <input type="button" style="width: 100%;" value="<<< Remove" />
+                </div>
                 <div class="vlist">
                     <label class="settings_label">
                         Included

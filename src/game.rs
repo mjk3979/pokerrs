@@ -58,7 +58,7 @@ pub struct PokerVariantDesc {
     pub name: String
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize)]
 #[derive(TS)]
 pub struct PokerVariants {
     pub descs: Vec<PokerVariantDesc>,

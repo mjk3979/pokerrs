@@ -3,6 +3,7 @@
 pub mod frozen;
 pub mod comb;
 pub mod fold_channel;
+pub mod template;
 pub mod static_files;
 //pub mod owning_broadcast;
 pub mod card;

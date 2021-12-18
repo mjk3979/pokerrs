@@ -204,6 +204,10 @@ fn player_from_params(params: &HashMap<String, String>) -> Option<PlayerId> {
     params.get("player").cloned()
 }
 
+fn default_template_variables() -> HashMap<&'static str, &'static str> {
+    
+}
+
 async fn shutdown_signal() {
     // Wait for the CTRL+C signal
     tokio::signal::ctrl_c()
@@ -352,7 +356,20 @@ impl GameServer {
                     *response.body_mut() = Body::from(serde_json::to_vec(&table_id).unwrap());
                     *response.status_mut() = StatusCode::OK;
                 }
-            }
+            },
+            (&Method::GET, "/index.html") |
+            (&Method::GET, "/") |
+            (&Method::GET, "") |
+            (&Method::GET, "/table") => {
+                if let Some(f) = self.static_files.load_file("index.html") {
+                    let body = apply_template(str::from_utf8(&f), default_template_variables());
+                    *response.status_mut() = StatusCode::OK;
+                    *response.body_mut() = Body::from(f);
+                    response.headers_mut().insert("Content-Type", HeaderValue::from_str(content_type("index.html")).unwrap());
+                } else {
+                    *response.status_mut() = StatusCode::NOT_FOUND;
+                }
+            },
             (&Method::GET, "/game") => {
                 if let Some(table) = self.table_from_params(&params) {
                     if let Some(player_id) = player_from_params(&params) {
