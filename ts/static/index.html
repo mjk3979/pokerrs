@@ -125,29 +125,25 @@
                     <label class="settings_label">
                         Excluded
                     </label>
-                    <select id="variants_excluded_input" multiple>
-                        <datalist id="variants_excluded">
-                            <option value="Five Card Draw">Five Card Draw</option>
-                            <option value="Seven Card Stud">Seven Card Stud</option>
-                            <option value="Five Card Stud">Five Card Stud</option>
-                        </datalist>
+                    <select id="variants_excluded" multiple>
+                        ${DEFAULT_VARIANTS_EXCLUDED}
                     </select>
                 </div>
                 <div class="spaced_list">
-                    <input type="button" style="width: 100%;" value="Add >>>" />
-                    <input type="button" style="width: 100%;" value="<<< Remove" />
+                    <input id="settings_add_variant_button" type="button" style="width: 100%;" value="Add >>>" />
+                    <input id="settings_remove_variant_button" type="button" style="width: 100%;" value="<<< Remove" />
                 </div>
                 <div class="vlist">
                     <label class="settings_label">
                         Included
                     </label>
-                    <select id="variants_included_input" multiple>
-                        <datalist id="variants_included">
-                            <option value="Texas Hold 'Em">Texas Hold 'Em</option>
-                            <option value="Omaha Hold 'Em">Omaha Hold 'Em</option>
-                        </datalist>
+                    <select id="variants_included" multiple>
+                        ${DEFAULT_VARIANTS_INCLUDED}
                     </select>
                 </div>
+            </div>
+            <div class="ralign">
+                <input type="button" id="create_table" class="large_button ok_button" value="Create Table" />
             </div>
         </div>
     </div>

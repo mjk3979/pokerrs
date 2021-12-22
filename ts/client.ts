@@ -553,6 +553,43 @@ function call_button_clicked() {
     }
 }
 
+function change_variant_clicked(change: 'add' | 'remove') {
+    const included_list = document.getElementById("variants_included")!;
+    const excluded_list = document.getElementById("variants_excluded")!;
+
+    if (change == 'add') {
+        let new_included = [];
+        for (const opt of included_list.children) {
+            new_included.push(opt);
+        }
+        let new_excluded = [];
+        for (const opt of excluded_list.children) {
+            if ((<HTMLOptionElement>opt).selected) {
+                new_included.push(opt);
+            } else {
+                new_excluded.push(opt);
+            }
+        }
+        included_list.replaceChildren(...new_included);
+        excluded_list.replaceChildren(...new_excluded);
+    } else if (change == 'remove') {
+        let new_included = [];
+        let new_excluded = [];
+        for (const opt of excluded_list.children) {
+            new_excluded.push(opt);
+        }
+        for (const opt of included_list.children) {
+            if ((<HTMLOptionElement>opt).selected) {
+                new_excluded.push(opt);
+            } else {
+                new_included.push(opt);
+            }
+        }
+        included_list.replaceChildren(...new_included);
+        excluded_list.replaceChildren(...new_excluded);
+    }
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     const player_input = document.getElementById("name_submit")!;
     const call_button = document.getElementById("call_button")!;
@@ -563,6 +600,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const next_round_button = document.getElementById("next_round_button")!;
     const start_server_button = document.getElementById("start_server_button")!;
     const add_bot_button = document.getElementById("add_bot_button")!;
+    const add_variant_button = document.getElementById("settings_add_variant_button")!;
+    const remove_variant_button = document.getElementById("settings_remove_variant_button")!;
+
     player_input.addEventListener('click', () => {
         join();
     });
@@ -586,5 +626,11 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     add_bot_button.addEventListener('click', () => {
         add_bot();
+    });
+    add_variant_button.addEventListener('click', () => {
+        change_variant_clicked('add');
+    });
+    remove_variant_button.addEventListener('click', () => {
+        change_variant_clicked('remove');
     });
 });
