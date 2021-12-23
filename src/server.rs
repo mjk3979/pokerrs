@@ -64,7 +64,7 @@ pub enum AnteRuleChangeDesc {
     },
     MulEveryNSeconds {
         mul: Chips,
-        seconds: u64
+        seconds: u32,
     },
 }
 
@@ -601,7 +601,7 @@ impl AnteRuleDesc {
                     starting_chips * (mul.pow((round / rounds) as u32))
                 },
                 MulEveryNSeconds{mul, seconds} => {
-                    let duration = std::time::Duration::from_secs(seconds);
+                    let duration = std::time::Duration::from_secs(seconds as u64);
                     starting_chips * (mul.pow((server_uptime.as_secs() / duration.as_secs()) as u32))
                 },
             };

@@ -270,7 +270,7 @@ pub struct Subpot<P> {
 }
 
 fn calc_subpots(state: &HandState) -> Vec<Subpot<PlayerRole>> {
-    let mut bets: BTreeMap<Chips, (i64, Vec<PlayerRole>)> = BTreeMap::new();
+    let mut bets: BTreeMap<Chips, (i32, Vec<PlayerRole>)> = BTreeMap::new();
     let mut players_involved = HashSet::new();
     let mut players_bet = 0;
     for (&role, player) in &state.players {

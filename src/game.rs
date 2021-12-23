@@ -11,7 +11,7 @@ use tokio::sync::oneshot;
 use std::sync::{Arc, Mutex};
 use std::collections::HashMap;
 
-pub type Chips = i64;
+pub type Chips = i32;
 pub type PlayerId = String;
 pub type PlayerRole = usize; // 0 is dealer, 1 is to the left of the dealer, etc.
 pub type PokerRoundError = String;
