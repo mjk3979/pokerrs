@@ -519,9 +519,9 @@ pub async fn play_poker<'a>(variant: PokerVariant,
     let ids = players.iter().map(|(role, p)| (*role, p.player_id.clone())).collect();
 
     loop {
-        //println!("{:#?}", state);
         update_players(&players, &ids, &spectator_channel, &state, &viewdiffs, round);
         viewdiffs.clear();
+        println!("Round");
         match state.cur_round {
             None => {
                 let end_game = state.players.iter().filter(|(role, player)| {
@@ -629,8 +629,8 @@ pub async fn play_poker<'a>(variant: PokerVariant,
                         }
                         let player = state.players.get_mut(&bet_role).unwrap();
                         let mut this_bet = None;
-                            //println!("Waiting on {}", bet_role);
                         if !player.folded && player.chips > player.total_bet + *all_bets.get(&bet_role).unwrap_or(&0) {
+                            println!("Waiting on {}", bet_role);
                             let f = players.get(&bet_role).unwrap().input.bet(last_bet_amount, min_bet);
                             match f.await {
                                 BetResp::Bet(num_chips) => {

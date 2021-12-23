@@ -104,19 +104,42 @@
                 <input name="starting_chips_input" id="starting_chips_input" type="number" min="1" value="1000" />
             </div>
             <div class="vlist">
+                <div class="marth biggap hfill">
+                    <label for="min_bet_input" class="settings_label">
+                        Starting Ante
+                    </label>
+                    <input name="min_bet_input" id="min_bet_input" type="number" min="1" value="1" />
+                </div>
+                <div class="marth biggap hfill">
+                    <label for="double_bet_input" class="settings_label">
+                        Double bets every
+                    </label>
+                    <input name="double_bet_input" id="double_bet_input" type="checkbox" />
+                </div>
+                <div class="marth biggap hfill">
+                    <input name="bet_increase_time" id="bet_increase_time" type="number" min="1" value="1" />
+                </div>
+                <div class="biggap marth hfill">
+                    <label>
+                        Rounds
+                        <input type="radio" name="bet_increase_type" id="bet_increase_rounds_option" value="rounds" />
+                    </label>
+                    <label>
+                        Minutes
+                        <input checked type="radio" name="bet_increase_type" id="bet_increase_minutes_option" value="minutes" />
+                    </label>
+                </div>
+            </div>
+            <div class="vlist">
                 <span class="settings_label">Game</span>
                 <div class="biggap marth">
                     <label>
                         Dealer's Choice
-                        <input type="radio" name="game" value="dealers_choice" />
+                        <input type="radio" name="game" id="dealers_choice_input" value="dealers_choice" />
                     </label>
                     <label>
                         Rotation
-                        <input type="radio" name="game" value="rotation" />
-                    </label>
-                    <label>
-                        Single Variant
-                        <input type="radio" name="game" value="single" />
+                        <input checked type="radio" name="game" id="rotation_input" value="rotation" />
                     </label>
                 </div>
             </div>
@@ -125,8 +148,8 @@
                     <label class="settings_label">
                         Excluded
                     </label>
-                    <select id="variants_excluded" multiple>
-                        ${DEFAULT_VARIANTS_EXCLUDED}
+                    <select class="variant_list" id="variants_excluded" multiple>
+                        ${ALL_VARIANTS}
                     </select>
                 </div>
                 <div class="spaced_list">
@@ -137,13 +160,13 @@
                     <label class="settings_label">
                         Included
                     </label>
-                    <select id="variants_included" multiple>
-                        ${DEFAULT_VARIANTS_INCLUDED}
+                    <select class="variant_list" id="variants_included" multiple>
+                        
                     </select>
                 </div>
             </div>
             <div class="ralign">
-                <input type="button" id="create_table" class="large_button ok_button" value="Create Table" />
+                <input type="button" id="create_table_button" class="large_button ok_button" value="Create Table" />
             </div>
         </div>
     </div>

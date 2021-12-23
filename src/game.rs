@@ -9,6 +9,7 @@ use serde::{Serialize, Deserialize};
 use async_trait::async_trait;
 use tokio::sync::oneshot;
 use std::sync::{Arc, Mutex};
+use std::collections::HashMap;
 
 pub type Chips = i64;
 pub type PlayerId = String;
@@ -52,18 +53,16 @@ pub struct PokerViewUpdate {
     pub diff: Vec<PokerLogUpdate>
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
 #[derive(TS)]
 pub struct PokerVariantDesc {
     pub name: String
 }
 
-#[derive(Clone, Serialize)]
+#[derive(Clone, Serialize, Deserialize)]
 #[derive(TS)]
 pub struct PokerVariants {
     pub descs: Vec<PokerVariantDesc>,
-    #[serde(skip)]
-    pub variants: Vec<PokerVariant>,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -270,17 +269,30 @@ pub fn five_card_draw() -> PokerVariant {
     }
 }
 
+impl PokerVariantDesc {
+    pub fn variant(&self) -> PokerVariant {
+        PokerVariants::table().remove(self).unwrap()
+    }
+}
+
+
 impl PokerVariants {
-    pub fn all() -> PokerVariants {
-        let all = vec![
+    pub fn table() -> HashMap<PokerVariantDesc, PokerVariant> {
+        vec![
             ("Texas Hold 'Em", texas_hold_em()),
             ("Omaha Hold 'Em", omaha_hold_em()),
             ("Seven Card Stud", seven_card_stud()),
             ("Five Card Stud", five_card_stud()),
             ("Five Card Draw", five_card_draw())
-        ];
-        let (names, variants): (Vec<_>, Vec<_>) = all.into_iter().unzip();
-        PokerVariants { descs: names.into_iter().map(|name| PokerVariantDesc{name: name.to_string()}).collect(), variants }
+        ].into_iter().map(|(name, v)| {
+            (PokerVariantDesc{name: name.to_string()}, v)
+        }).collect()
+    }
+
+    pub fn all() -> PokerVariants {
+        let mut descs: Vec<PokerVariantDesc> = PokerVariants::table().keys().cloned().collect();
+        descs.sort();
+        PokerVariants{descs}
     }
 }
 

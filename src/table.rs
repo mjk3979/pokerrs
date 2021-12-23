@@ -163,6 +163,11 @@ impl TableState {
         };
         retval
     }
+
+    fn server_uptime(&self) -> Duration {
+        let now = std::time::Instant::now();
+        (now - self.start_time) + self.past_time
+    }
 }
 
 pub type SpecialRules = Vec<SpecialCard>;
@@ -211,7 +216,7 @@ impl Table {
                     idx = 0;
                 }
                 let desc = variants.descs.get(idx).unwrap().clone();
-                let retval = variants.variants.get(idx).unwrap().clone();
+                let retval = desc.variant();
                 {
                     idx += 1;
                     let mut state = self.state.lock().unwrap();
@@ -222,16 +227,8 @@ impl Table {
             PokerVariantState::DealersChoice{variants} => {
                 let DealersChoiceResp{variant_idx: idx, special_cards} = dealer.input.dealers_choice(variants.descs.clone()).await;
                 let desc = variants.descs.get(idx).unwrap().clone();
-                (variants.variants.get(idx).unwrap().clone(), desc, special_cards)
+                (desc.variant(), desc, special_cards)
             },
-        }
-    }
-
-    fn server_uptime(&self) -> Duration {
-        {
-            let state = self.state.lock().unwrap();
-            let now = std::time::Instant::now();
-            (now - state.start_time) + state.past_time
         }
     }
 
@@ -245,6 +242,7 @@ impl Table {
                 running_rx.changed().await;
             }
         }
+        println!("Next round starting...");
         let (roles, players, round) = {
             let mut state = self.state.lock().unwrap();
             let roles = state.next_round_roles();
@@ -262,18 +260,24 @@ impl Table {
             deck.shuffle(&mut rng);
         }
         let mut rules = self.rules.clone();
+        println!("Getting variant");
         let (variant, variant_desc, special_cards) = self.get_next_variant().await;
         {
+            println!("Got variant");
             let mut state = self.state.lock().unwrap();
+            println!("Locked state");
             state.running_variant = Some(variant_desc);
             self.table_view_tx.send(self.viewstate(&state));
+            println!("Sent viewstate");
 
-            rules.ante = (state.ante_rule)(round, self.server_uptime());
+            rules.ante = (state.ante_rule)(round, state.server_uptime());
+            println!("Got ante rule");
             rules.min_bet = match &rules.ante {
                 AnteRule::Ante(ante) => *ante,
                 AnteRule::Blinds(blinds) => blinds.iter().map(|b| b.amount).max().unwrap(),
             };
         }
+        println!("Playing poker...");
         match play_poker(variant,
             Mutex::new(deck),
             players,

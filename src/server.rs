@@ -1,6 +1,7 @@
 use crate::card::*;
 use crate::game::*;
 use crate::table::*;
+use crate::template::*;
 use crate::viewstate::*;
 use crate::fold_channel;
 use crate::gamestate::{play_poker};
@@ -119,6 +120,13 @@ pub struct GameServerPlayerInputSource {
     dealers_choice_rx: watch::Receiver<DealersChoiceResp>,
 }
 
+#[derive(Clone, Serialize, Deserialize)]
+#[derive(TS)]
+pub struct ServerTableParameters {
+    table_config: TableConfig,
+    ante_rule: AnteRuleDesc,
+}
+
 impl GameServerPlayerInputSource {
     fn new() -> GameServerPlayerInputSource {
         let (update_tx, update_rx) = watch::channel(None);
@@ -204,8 +212,12 @@ fn player_from_params(params: &HashMap<String, String>) -> Option<PlayerId> {
     params.get("player").cloned()
 }
 
-fn default_template_variables() -> HashMap<&'static str, &'static str> {
-    
+fn default_template_variables() -> HashMap<String, String> {
+    vec![
+        ("ALL_VARIANTS".to_string(), PokerVariants::all().descs.into_iter().map(|desc| {
+            format!("<option value=\"{}\">{}</option>", desc.name, desc.name)
+        }).collect::<Vec<String>>().join("\n")),
+    ].into_iter().collect()
 }
 
 async fn shutdown_signal() {
@@ -322,28 +334,35 @@ impl GameServer {
         self.tables.lock().unwrap().get(&table_id).cloned()
     }
 
-    fn create_table(&self, params: &HashMap<String, String>) -> Result<TableId, String> {
-        if let Some(table_config) = params.get("table_config").map(|s| serde_json::from_str::<TableConfig>(s).ok()).flatten() {
-            if let Some(ante_rule) = params.get("ante_rule").map(|s| serde_json::from_str::<AnteRuleDesc>(s).ok()).flatten() {
-                let gametable = Arc::new({
-                    let starting_rules = ante_rule.starting_rules();
-                    let table = Table::new(table_config, starting_rules, ante_rule.rule_fn());
-                    let players = Mutex::new(HashMap::new());
-                    let log_update_channel_r = table.spectator_rx.clone();
-                    let bots = Mutex::new(Vec::new());
-                    GameServerTable { table, players, log_update_channel_r, bots }
-                });
+    fn create_table(&self, params: ServerTableParameters) -> Result<TableId, String> {
+        let ServerTableParameters{table_config, ante_rule} = params;
+        let gametable = Arc::new({
+            let starting_rules = ante_rule.starting_rules();
+            let table = Table::new(table_config, starting_rules, ante_rule.rule_fn());
+            let players = Mutex::new(HashMap::new());
+            let log_update_channel_r = table.spectator_rx.clone();
+            let bots = Mutex::new(Vec::new());
+            GameServerTable { table, players, log_update_channel_r, bots }
+        });
 
-                let mut tables = self.tables.lock().unwrap();
-                let table_id = tables.keys().max().copied().map(|tid| tid+1).unwrap_or(0);
-                tables.insert(table_id, gametable);
-                Ok(table_id)
-            } else {
-                Err("Invalid ante rule desc".to_string())
+        let mut tables = self.tables.lock().unwrap();
+        let table_id = tables.keys().max().copied().map(|tid| tid+1).unwrap_or(0);
+        tables.insert(table_id, gametable.clone());
+
+        tokio::spawn(async move {
+            loop {
+                tokio::select! {
+                    _ = shutdown_signal() => break,
+                    next_round = gametable.table.next_round() => {
+                        if !next_round {
+                            break;
+                        }
+                    }
+                }
             }
-        } else {
-            Err("Invalid table config".to_string())
-        }
+        });
+
+        Ok(table_id)
     }
 
     pub async fn serve(&self, req: Request<Body>) -> Result<Response<Body>, Infallible> {
@@ -352,22 +371,28 @@ impl GameServer {
         let params = req.uri().query().map(|q| url::form_urlencoded::parse(q.as_bytes()).into_owned().collect()).unwrap_or(HashMap::new());
         match (req.method(), req.uri().path()) {
             (&Method::POST, "/create_table") => {
-                if let Ok(table_id) = self.create_table(&params) {
-                    *response.body_mut() = Body::from(serde_json::to_vec(&table_id).unwrap());
-                    *response.status_mut() = StatusCode::OK;
-                }
+                if let Ok(table_params) = serde_json::from_slice::<ServerTableParameters>(&hyper::body::to_bytes(req.into_body()).await.unwrap()) {
+                    if let Ok(table_id) = self.create_table(table_params) {
+                        *response.body_mut() = Body::from(serde_json::to_vec(&table_id).unwrap());
+                        *response.status_mut() = StatusCode::OK;
+                    }
+                } 
             },
             (&Method::GET, "/index.html") |
             (&Method::GET, "/") |
             (&Method::GET, "") |
             (&Method::GET, "/table") => {
                 if let Some(f) = self.static_files.load_file("index.html") {
-                    let body = apply_template(str::from_utf8(&f), default_template_variables());
-                    *response.status_mut() = StatusCode::OK;
-                    *response.body_mut() = Body::from(f);
-                    response.headers_mut().insert("Content-Type", HeaderValue::from_str(content_type("index.html")).unwrap());
+                    if let Ok(s) = std::str::from_utf8(&f) {
+                        let body = apply_template(s, &default_template_variables());
+                        *response.status_mut() = StatusCode::OK;
+                        *response.body_mut() = Body::from(body);
+                        response.headers_mut().insert("Content-Type", HeaderValue::from_str(content_type("index.html")).unwrap());
+                    } else {
+                        *response.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
+                    }
                 } else {
-                    *response.status_mut() = StatusCode::NOT_FOUND;
+                    *response.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
                 }
             },
             (&Method::GET, "/game") => {
@@ -567,6 +592,7 @@ impl AnteRuleDesc {
         let blinds = self.blinds;
 
         Box::new(move |round, server_uptime| {
+            println!("In the rule fn");
             let low_blind = match change {
                 Constant => {
                     starting_chips

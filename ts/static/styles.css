@@ -254,3 +254,7 @@ html, body {
     align-content: flex-start;
     gap: 0.5em;
 }
+
+.variant_list {
+    width: 10em;
+}

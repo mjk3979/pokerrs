@@ -40,6 +40,7 @@ export! {
     SpecialCard,
     DealersChoiceResp,
     AnteRuleChangeDesc,
-    AnteRuleDesc
+    AnteRuleDesc,
+    ServerTableParameters
     => "ts/pokerrs.ts",
 }

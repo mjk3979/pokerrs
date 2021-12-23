@@ -1,4 +1,20 @@
-import {ServerUpdate, ServerActionRequest, SpecialCardType, DealersChoiceResp, PokerViewState, PlayerViewState, TableViewState, CardViewState} from "./pokerrs.ts";
+import {
+    ServerUpdate,
+    ServerActionRequest,
+    SpecialCardType,
+    DealersChoiceResp,
+    PokerViewState,
+    PlayerViewState,
+    TableViewState,
+    CardViewState,
+    PokerVariantDesc,
+    PokerVariants,
+    PokerVariantSelector,
+    TableConfig,
+    AnteRuleDesc,
+    AnteRuleChangeDesc,
+    ServerTableParameters,
+} from "./pokerrs.ts";
 
 function api<T>(url: string): Promise<T> {
   return fetch(url)
@@ -13,7 +29,7 @@ function api<T>(url: string): Promise<T> {
 
 function fetch_update(player_id: string, start_from: number, known_action_requested: ServerActionRequest | null) {
     let action_request_param = `&known_action_requested=${encodeURI(JSON.stringify(known_action_requested))}`;
-    api<ServerUpdate>(`/gamediff?send_string_log=1&player=${player_id}&start_from=${start_from}${action_request_param}`).then(update => {
+    api<ServerUpdate>(`/gamediff?send_string_log=1&player=${player_id}&table_id=${current_table_id}&start_from=${start_from}${action_request_param}`).then(update => {
         console.log(update);
         for (let log_update of update.log) {
             start_from += log_update.log.length;
@@ -297,6 +313,7 @@ function draw_action(action: ServerActionRequest | null, viewstate: PokerViewSta
 
 var client_logs: Array<Array<String>> = [];
 var log_page: number = 0;
+var current_table_id = "";
 
 function update_logs(update: ServerUpdate | null, log_page_change: number | null) {
     const log_list = document.getElementById("log_list")!;
@@ -394,7 +411,7 @@ function join() {
     if (player_id.length > 0) {
         const name_screen = document.getElementById("name_screen");
         name_screen?.classList.add("hidden");
-        api<ServerUpdate>(`/game?player=${player_id}`).then(update => {
+        api<ServerUpdate>(`/game?player=${player_id}&table_id=${current_table_id}`).then(update => {
             draw(player_id, update);
             const action = update.player?.action_requested ?? null;
             fetch_update(player_id, 0, action);
@@ -441,7 +458,7 @@ function dealers_choice(idx: number) {
         variant_idx: idx,
         special_cards: special_cards,
     };
-    fetch(`/dealers_choice?player=${player_id}`, {
+    fetch(`/dealers_choice?player=${player_id}&table_id=${current_table_id}`, {
         method: "POST",
         body: JSON.stringify(resp)
     }).then(resp => {
@@ -470,7 +487,7 @@ function replace() {
                 clicked_card(cidx);
             }
         };
-        fetch(`/replace?player=${player_id}`, {
+        fetch(`/replace?player=${player_id}&table_id=${current_table_id}`, {
             method: "POST",
             body: JSON.stringify(replace_resp)
         }).then(resp => {
@@ -515,7 +532,7 @@ function bet(action: "bet" | "fold" | "call") {
     fold_button.setAttribute("disabled", "");
     bet_button.setAttribute("disabled", "");
     bet_input.setAttribute("disabled", "");
-    fetch(`/bet?player=${player_id}`, {
+    fetch(`/bet?player=${player_id}&table_id=${current_table_id}`, {
         method: "POST",
         body: JSON.stringify(bet_resp)
     }).then(resp => {
@@ -534,13 +551,13 @@ function bet(action: "bet" | "fold" | "call") {
 }
 
 function start_server() {
-    fetch('/start', {
+    fetch(`/start?table_id=${current_table_id}`, {
         method: 'POST'
     });
 }
 
 function add_bot() {
-    fetch('/add_bot', {
+    fetch(`/add_bot?table_id=${current_table_id}`, {
         method: 'POST'
     });
 }
@@ -590,6 +607,89 @@ function change_variant_clicked(change: 'add' | 'remove') {
     }
 }
 
+function read_ante_rule(): AnteRuleDesc {
+    const min_bet_input = <HTMLInputElement>document.getElementById("min_bet_input")!;
+    const bet_increase_time = <HTMLInputElement>document.getElementById("bet_increase_time")!;
+    const double_bet_input = <HTMLInputElement>document.getElementById("double_bet_input")!;
+    const rounds_option = <HTMLInputElement>document.getElementById("bet_increase_rounds_option")!;
+    const minutes_option = <HTMLInputElement>document.getElementById("bet_increase_minutes_option")!;
+
+    let change: AnteRuleChangeDesc = double_bet_input.checked ? (rounds_option.checked ? {
+        kind: "MulEveryNRounds",
+        data: {
+            mul: 2,
+            rounds: Number.parseInt(bet_increase_time.value)
+        }
+    } : {
+        kind: "MulEveryNSeconds",
+        data: {
+            mul: 2,
+            seconds: Number.parseInt(bet_increase_time.value) * 60
+        }
+    }) : {kind: "Constant"};
+
+    let retval: AnteRuleDesc = {
+        starting_value: Number.parseInt(min_bet_input.value),
+        blinds: false,
+        change: change,
+    };
+
+    return retval;
+}
+
+function create_table() {
+    const create_table_button = document.getElementById("create_table_button")!;
+    const table_settings_modal = document.getElementById("table_settings_modal")!;
+    const max_players_input = <HTMLInputElement>document.getElementById("max_players_input")!;
+    const starting_chips_input = <HTMLInputElement>document.getElementById("starting_chips_input")!;
+    const dealers_choice_input = <HTMLInputElement>document.getElementById("dealers_choice_input")!;
+    const rotation_input = <HTMLInputElement>document.getElementById("rotation_input")!;
+    const included_list = document.getElementById("variants_included")!;
+
+    create_table_button.setAttribute("disabled", "");
+
+    let variants: Array<PokerVariantDesc> = [];
+    for (const opt of included_list.children) {
+        variants.push({name: (<HTMLOptionElement>opt).value});
+    }
+
+    let selector: PokerVariantSelector = {
+        kind: rotation_input.checked ? "Rotation" : "DealersChoice",
+        data: {
+            descs: variants,
+        },
+    };
+
+    let config: TableConfig = {
+        max_players: Number.parseInt(max_players_input.value),
+        starting_chips: Number.parseInt(starting_chips_input.value),
+        variant_selector: selector,
+    };
+
+    console.log(config);
+
+    let params: ServerTableParameters = {
+        table_config: config,
+        ante_rule: read_ante_rule(),
+    };
+
+    fetch('/create_table', {
+        method: "POST",
+        body: JSON.stringify(params)
+    }).then(resp => {
+        create_table_button.removeAttribute("disabled");
+        if (resp.ok) {
+            table_settings_modal.classList.add("hidden");
+            resp.json().then(table_id => {
+                window.location.href = `table?table_id=${table_id}`;
+            });
+        } else {
+        }
+    }).catch(err => {
+        create_table_button.removeAttribute("disabled");
+    });
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     const player_input = document.getElementById("name_submit")!;
     const call_button = document.getElementById("call_button")!;
@@ -602,6 +702,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const add_bot_button = document.getElementById("add_bot_button")!;
     const add_variant_button = document.getElementById("settings_add_variant_button")!;
     const remove_variant_button = document.getElementById("settings_remove_variant_button")!;
+    const table_settings_modal = document.getElementById("table_settings_modal")!;
+    const create_table_button = document.getElementById("create_table_button")!;
 
     player_input.addEventListener('click', () => {
         join();
@@ -633,4 +735,14 @@ document.addEventListener('DOMContentLoaded', () => {
     remove_variant_button.addEventListener('click', () => {
         change_variant_clicked('remove');
     });
+    create_table_button.addEventListener('click', () => {
+        create_table();
+    });
+
+    const current_url = new URL(window.location.href);
+    const table_id = current_url.searchParams.get("table_id");
+    if (table_id) {
+        table_settings_modal.classList.add("hidden");
+        current_table_id = table_id;
+    }
 });
