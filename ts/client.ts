@@ -613,6 +613,7 @@ function read_ante_rule(): AnteRuleDesc {
     const double_bet_input = <HTMLInputElement>document.getElementById("double_bet_input")!;
     const rounds_option = <HTMLInputElement>document.getElementById("bet_increase_rounds_option")!;
     const minutes_option = <HTMLInputElement>document.getElementById("bet_increase_minutes_option")!;
+    const blinds_radio = <HTMLInputElement>document.getElementById("ante_blinds")!;
 
     let change: AnteRuleChangeDesc = double_bet_input.checked ? (rounds_option.checked ? {
         kind: "MulEveryNRounds",
@@ -630,7 +631,7 @@ function read_ante_rule(): AnteRuleDesc {
 
     let retval: AnteRuleDesc = {
         starting_value: Number.parseInt(min_bet_input.value),
-        blinds: false,
+        blinds: blinds_radio.checked,
         change: change,
     };
 
