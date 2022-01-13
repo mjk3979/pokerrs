@@ -44,7 +44,7 @@ pub enum PlayerResp {
 #[derive(TS)]
 pub struct PokerLogUpdate {
     pub round: usize,
-    pub log: Vec<PokerViewDiff<PlayerId>>
+    pub log: Vec<TableViewDiff<PokerViewDiff<PlayerId>>>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]

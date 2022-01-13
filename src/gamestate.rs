@@ -447,7 +447,7 @@ fn update_players<'a, 'b, 'c, 'd, 'e>(players: &'b HashMap<PlayerRole, LivePlaye
             viewstate: PokerViewState::from_handstate_and_player(&state, role),
             diff: vec![PokerLogUpdate {
                 round,
-                log: viewdiffs.iter().map(|viewdiff| viewdiff.player_diff(Some(&player.player_id))).collect()
+                log: viewdiffs.iter().map(|viewdiff| TableViewDiff::GameDiff(viewdiff.player_diff(Some(&player.player_id)))).collect()
             }],
         });
     }

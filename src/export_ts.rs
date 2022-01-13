@@ -41,6 +41,9 @@ export! {
     DealersChoiceResp,
     AnteRuleChangeDesc,
     AnteRuleDesc,
-    ServerTableParameters
+    ServerTableParameters,
+    TableRules,
+    AnteRule,
+    Blind
     => "ts/pokerrs.ts",
 }

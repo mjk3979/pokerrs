@@ -104,6 +104,32 @@ pub enum PokerViewDiff<P> {
     Unknown
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Serialize, Deserialize, TS)]
+#[serde(tag = "kind", content="data")]
+pub enum TableEvent {
+    PlayerJoined {
+        player_id: PlayerId
+    },
+    VariantChange {
+        new_variant_desc: PokerVariantDesc
+    },
+    AnteChange {
+        new_table_rules: TableRules
+    },
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Serialize, Deserialize, TS)]
+#[serde(tag = "kind", content="data")]
+pub enum TableViewDiff<G> 
+    where G: Clone + std::fmt::Debug
+{
+    GameDiff(G),
+    TableDiff(TableEvent),
+}
+
+
 impl std::fmt::Display for CardViewState {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
@@ -359,3 +385,47 @@ impl PokerViewState {
         self.bet_this_round.values().copied().sum::<Chips>() + self.players.values().map(|p| p.total_bet).sum::<Chips>()
     }
 }
+
+impl std::fmt::Display for TableEvent {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        use TableEvent::*;
+        match self {
+            PlayerJoined {player_id} => {
+                write!(f, "{} joined", player_id)?;
+            },
+            VariantChange {new_variant_desc} => {
+                write!(f, "Game changed to {}", new_variant_desc.name)?;
+            },
+            AnteChange {new_table_rules} => {
+                use AnteRule::*;
+                match &new_table_rules.ante {
+                    Ante(ante) => write!(f, "Ante is now {}", ante)?,
+                    Blinds(blinds) => write!(f, "Blinds are now {}", blinds.iter().map(|b| b.amount.to_string()).collect::<Vec<String>>().join(", "))?,
+                }
+            },
+        }
+        Ok(())
+    }
+}
+
+impl<G: std::fmt::Display + Clone + std::fmt::Debug> std::fmt::Display for TableViewDiff<G> {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        use TableViewDiff::*;
+        match self {
+            GameDiff(g) => write!(f, "{}", g)?,
+            TableDiff(t) => write!(f, "{}", t)?,
+        }
+        Ok(())
+    }
+}
+
+/*
+impl Serialize for TableViewDiff<G>
+where G: Clone + Serialize
+{
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+        where S: Serializer {
+        let mut state = serializer.serialize_struct_variant("TableViewDiff", 
+    }
+}
+*/

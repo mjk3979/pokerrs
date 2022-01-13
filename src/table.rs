@@ -17,11 +17,13 @@ use std::time::Duration;
 
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
+#[derive(TS, Serialize, Deserialize)]
 pub struct Blind {
     pub amount: Chips
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(TS, Serialize, Deserialize)]
 pub enum AnteRule {
     Ante(Chips),
     Blinds(Vec<Blind>)
@@ -30,6 +32,7 @@ pub enum AnteRule {
 pub type AnteRuleFn = dyn Send + (Fn(usize, Duration) -> AnteRule);
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(TS, Serialize, Deserialize)]
 pub struct TableRules {
     pub ante: AnteRule,
     pub ante_name: String,
@@ -42,7 +45,7 @@ pub struct Seat(pub usize);
 
 struct HandLog {
     round: usize,
-    log: Vec<PokerGlobalViewDiff<PlayerId>>,
+    log: Vec<TableViewDiff<PokerGlobalViewDiff<PlayerId>>>,
 }
 
 #[derive(Clone)]
@@ -55,6 +58,7 @@ pub enum PokerVariantState {
         variants: PokerVariants,
     }
 }
+
 struct TableState {
     players: HashMap<PlayerId, LivePlayer>,
     seats: BTreeMap<Seat, PlayerId>,
@@ -119,7 +123,16 @@ impl TableState {
                 if start_from < log.len() {
                     retval.push(PokerLogUpdate {
                         round: *round,
-                        log: (&log[start_from..]).iter().map(|l| l.player_diff(player)).collect(),
+                        log: (&log[start_from..]).iter().map(|l|{
+                            match l {
+                                TableViewDiff::GameDiff(g) => {
+                                    TableViewDiff::GameDiff(g.player_diff(player))
+                                },
+                                TableViewDiff::TableDiff(t) => {
+                                    TableViewDiff::TableDiff(t.clone())
+                                },
+                            }
+                        }).collect(),
                     });
                     start_from = 0;
                 } else {
@@ -133,7 +146,7 @@ impl TableState {
             let start_from = std::cmp::max(self.current_log_start, start_from);
             retval.push(PokerLogUpdate {
                 round,
-                log: (&cur_log[start_from..]).iter().map(|l| l.player_diff(player)).collect(),
+                log: (&cur_log[start_from..]).iter().map(|l| TableViewDiff::GameDiff(l.player_diff(player))).collect(),
             });
         }
         retval
@@ -290,7 +303,7 @@ impl Table {
                 tokio::time::sleep(Duration::from_millis(2_000)).await;
                 let mut state = self.state.lock().unwrap();
                 {
-                    let old_log = (&self.spectator_rx.borrow()[state.current_log_start..]).iter().cloned().collect();
+                    let old_log = (&self.spectator_rx.borrow()[state.current_log_start..]).iter().map(|log| TableViewDiff::GameDiff(log.clone())).collect();
                     state.old_logs.push(HandLog {
                         round,
                         log: old_log,
