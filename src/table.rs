@@ -45,7 +45,8 @@ pub struct Seat(pub usize);
 
 struct HandLog {
     round: usize,
-    log: Vec<TableViewDiff<PokerGlobalViewDiff<PlayerId>>>,
+    start: usize,
+    end: usize,
 }
 
 #[derive(Clone)]
@@ -121,52 +122,44 @@ impl TableState {
     }
 
     fn add_hand_logs(&mut self, full_hand_log: &[PokerGlobalViewDiff<PlayerId>]) {
-        for log in &full_hand_log[self.log_read_p..] {
+        for log in &full_hand_log[self.last_log_read..] {
             self.cur_log.push(TableViewDiff::GameDiff(log.clone()));
         }
-        self.log_read_p = full_hand_log.len();
+        self.last_log_read = full_hand_log.len();
     }
 
     fn new_round(&mut self) {
-        let log = std::mem::take(self.cur_log);
+        let start = self.old_logs.last().map(|hl| hl.end).unwrap_or(0);
         self.old_logs.push(HandLog {
             round: self.old_logs.len()+1,
-            log
+            start,
+            end: self.cur_log.len(),
         });
     }
 
-    fn logs(&self, cur_log: &[PokerGlobalViewDiff<PlayerId>], player: Option<&PlayerId>, start_from: usize) -> Vec<PokerLogUpdate> {
+    fn logs(&self, player: Option<&PlayerId>, start_from: usize) -> Vec<PokerLogUpdate> {
+        use TableViewDiff::*;
         let mut retval = Vec::new();
-        if start_from < self.current_log_start {
-            let mut start_from = start_from;
-            for HandLog{round, log} in &self.old_logs {
-                if start_from < log.len() {
-                    retval.push(PokerLogUpdate {
-                        round: *round,
-                        log: (&log[start_from..]).iter().map(|l|{
-                            match l {
-                                TableViewDiff::GameDiff(g) => {
-                                    TableViewDiff::GameDiff(g.player_diff(player))
-                                },
-                                TableViewDiff::TableDiff(t) => {
-                                    TableViewDiff::TableDiff(t.clone())
-                                },
-                            }
-                        }).collect(),
-                    });
-                    start_from = 0;
-                } else {
-                    start_from -= log.len();
-                }
+        for &HandLog{round, start, end} in &self.old_logs {
+            if start >= start_from {
+                retval.push(PokerLogUpdate {
+                    round,
+                    log: (&self.cur_log[start..end]).iter().map(|tv| match tv {
+                        GameDiff(gvd) => GameDiff(gvd.player_diff(player)),
+                        TableDiff(te) => TableDiff(te.clone()),
+                    }).collect()
+                });
             }
         }
-
-        if start_from < cur_log.len() {
-            let round = self.old_logs.len();
-            let start_from = std::cmp::max(self.current_log_start, start_from);
+        let round = self.old_logs.len();
+        if self.cur_log.len() > start_from {
+            let start = std::cmp::max(start_from, self.old_logs.last().map(|hl| hl.end).unwrap_or(0));
             retval.push(PokerLogUpdate {
                 round,
-                log: (&cur_log[start_from..]).iter().map(|l| TableViewDiff::GameDiff(l.player_diff(player))).collect(),
+                log: (&self.cur_log[start..]).iter().map(|tv| match tv {
+                    GameDiff(gvd) => GameDiff(gvd.player_diff(player)),
+                    TableDiff(te) => TableDiff(te.clone()),
+                }).collect()
             });
         }
         retval
@@ -213,13 +206,14 @@ impl Table {
             seats: BTreeMap::new(),
             last_dealer: None,
             roles: None,
-            current_log_start: 0,
             old_logs: Vec::new(),
             variant_state: config.variant_selector.clone().into(),
             running_variant: None,
             start_time,
             past_time: std::time::Duration::from_secs(0),
             ante_rule,
+            cur_log: Vec::new(),
+            last_log_read: 0,
         };
         let (running_tx, running_rx) = watch::channel(false);
         let (spectator_tx, spectator_rx) = fold_channel::channel(Vec::new(), |v, t: Vec<PokerGlobalViewDiff<PlayerId>>| v.extend_from_slice(&t));
@@ -299,16 +293,21 @@ impl Table {
             println!("Got variant");
             let mut state = self.state.lock().unwrap();
             println!("Locked state");
-            state.running_variant = Some(variant_desc);
+            state.running_variant = Some(variant_desc.clone());
+            state.add_table_event(TableEvent::VariantChange{new_variant_desc: variant_desc});
             self.table_view_tx.send(self.viewstate(&state));
             println!("Sent viewstate");
 
             rules.ante = (state.ante_rule)(round, state.server_uptime());
             println!("Got ante rule");
-            rules.min_bet = match &rules.ante {
+            let new_min_bet = match &rules.ante {
                 AnteRule::Ante(ante) => *ante,
                 AnteRule::Blinds(blinds) => blinds.iter().map(|b| b.amount).max().unwrap(),
             };
+            if new_min_bet != rules.min_bet {
+                rules.min_bet = new_min_bet;
+                state.add_table_event(TableEvent::AnteChange{new_table_rules: rules.clone()});
+            }
         }
         println!("Playing poker...");
         match play_poker(variant,
@@ -323,13 +322,10 @@ impl Table {
                 tokio::time::sleep(Duration::from_millis(2_000)).await;
                 let mut state = self.state.lock().unwrap();
                 {
-                    let old_log = (&self.spectator_rx.borrow()[state.current_log_start..]).iter().map(|log| TableViewDiff::GameDiff(log.clone())).collect();
-                    state.old_logs.push(HandLog {
-                        round,
-                        log: old_log,
-                    });
+                    let old_log = (&self.spectator_rx.borrow()[..]);
+                    state.add_hand_logs(old_log);
+                    state.new_round();
                 }
-                state.current_log_start += state.old_logs.last().unwrap().log.len();
                 for (role, change) in winners.into_iter() {
                     state.players.get_mut(roles.get(&role).unwrap()).unwrap().chips += change;
                 }
@@ -347,10 +343,10 @@ impl Table {
     }
 
     pub fn logs(&self, player_id: Option<&PlayerId>, start_from: usize) -> Vec<PokerLogUpdate> {
-        let state = self.state.lock().unwrap();
+        let mut state = self.state.lock().unwrap();
         let cur_log = self.spectator_rx.borrow();
         state.add_hand_logs(&cur_log);
-        state.logs(&cur_log, player_id, start_from)
+        state.logs(player_id, start_from)
     }
 
     pub fn join(&self, player_id: PlayerId, player: Arc<PlayerInputSource>) -> Result<(), JoinError> {
@@ -367,7 +363,8 @@ impl Table {
             input: player
         });
         let seat_len = state.seats.len();
-        state.seats.insert(Seat(seat_len), player_id);
+        state.seats.insert(Seat(seat_len), player_id.clone());
+        state.add_table_event(TableEvent::PlayerJoined{player_id});
         self.table_view_tx.send(self.viewstate(&state));
         Ok(())
     }

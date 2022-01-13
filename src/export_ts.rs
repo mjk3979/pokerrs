@@ -44,6 +44,8 @@ export! {
     ServerTableParameters,
     TableRules,
     AnteRule,
-    Blind
+    Blind,
+    TableEvent,
+    TableViewDiff<PokerViewDiff<PlayerId>>
     => "ts/pokerrs.ts",
 }
