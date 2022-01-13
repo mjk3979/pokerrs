@@ -64,8 +64,9 @@ struct TableState {
     seats: BTreeMap<Seat, PlayerId>,
     last_dealer: Option<Seat>,
     roles: Option<HashMap<PlayerId, PlayerRole>>,
+    cur_log: Vec<TableViewDiff<PokerGlobalViewDiff<PlayerId>>>,
     old_logs: Vec<HandLog>,
-    current_log_start: usize,
+    last_log_read: usize,
     variant_state: PokerVariantState,
     running_variant: Option<PokerVariantDesc>,
     start_time: std::time::Instant,
@@ -113,6 +114,25 @@ impl TableState {
         self.seats.range(Seat(seat+1)..).next()
         // or wrap around
         .or(self.seats.range(..Seat(seat+1)).next()).map(|(&s, p)| (s, p.clone()))
+    }
+
+    fn add_table_event(&mut self, event: TableEvent) {
+        self.cur_log.push(TableViewDiff::TableDiff(event));
+    }
+
+    fn add_hand_logs(&mut self, full_hand_log: &[PokerGlobalViewDiff<PlayerId>]) {
+        for log in &full_hand_log[self.log_read_p..] {
+            self.cur_log.push(TableViewDiff::GameDiff(log.clone()));
+        }
+        self.log_read_p = full_hand_log.len();
+    }
+
+    fn new_round(&mut self) {
+        let log = std::mem::take(self.cur_log);
+        self.old_logs.push(HandLog {
+            round: self.old_logs.len()+1,
+            log
+        });
     }
 
     fn logs(&self, cur_log: &[PokerGlobalViewDiff<PlayerId>], player: Option<&PlayerId>, start_from: usize) -> Vec<PokerLogUpdate> {
@@ -329,6 +349,7 @@ impl Table {
     pub fn logs(&self, player_id: Option<&PlayerId>, start_from: usize) -> Vec<PokerLogUpdate> {
         let state = self.state.lock().unwrap();
         let cur_log = self.spectator_rx.borrow();
+        state.add_hand_logs(&cur_log);
         state.logs(&cur_log, player_id, start_from)
     }
 
