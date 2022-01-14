@@ -32,6 +32,12 @@ use std::task::Waker;
 use tokio::sync::watch;
 use tokio::sync::oneshot;
 use tokio::sync::broadcast;
+use async_stream::stream;
+use tokio::net::TcpListener;
+use tokio_rustls::TlsAcceptor;
+use hyper::server::accept;
+use hyper_rustls;
+use futures_util::future::TryFutureExt;
 
 pub struct PlayerConnection {
     pub input_source: Arc<GameServerPlayerInputSource>
@@ -239,9 +245,36 @@ impl GameServer {
             }
         });
 
-        let addr = ([0, 0, 0, 0], 8080).into();
-        
-        let http_server = Server::bind(&addr)
+        let addr = "0.0.0.0:8080".parse::<SocketAddr>().unwrap();
+        let tls_cfg = {
+            // Load public certificate.
+            let certs = load_certs("examples/sample.pem").unwrap();
+            // Load private key.
+            let key = load_private_key("examples/sample.rsa").unwrap();
+            // Do not use client certificate authentication.
+            let mut cfg = rustls::ServerConfig::builder()
+                .with_safe_defaults()
+                .with_no_client_auth()
+                .with_single_cert(certs, key)
+                .map_err(|e| error(format!("{}", e))).unwrap();
+            // Configure ALPN to accept HTTP/2, HTTP/1.1 in that order.
+            cfg.alpn_protocols = vec![b"h2".to_vec(), b"http/1.1".to_vec()];
+            std::sync::Arc::new(cfg)
+        };
+        let tls_acceptor = TlsAcceptor::from(tls_cfg);
+        let tcp = TcpListener::bind(&addr).await.unwrap();
+        let incoming_tls_stream = stream! {
+            loop {
+                let (socket, _) = tcp.accept().await?;
+                let stream = tls_acceptor.accept(socket);
+                if let Ok(s) = stream.await {
+                    let retval: Result<_, std::io::Error> = Ok(s);
+                    yield retval;
+                }
+            }
+        };
+        let acceptor = accept::from_stream(incoming_tls_stream);
+        let http_server = Server::builder(acceptor)
             .serve(make_service_fn(|conn| {
                 let cserver = server.clone();
                 async move {
@@ -616,4 +649,41 @@ impl AnteRuleDesc {
             }
         })
     }
+}
+
+fn error(err: String) -> std::io::Error {
+    std::io::Error::new(std::io::ErrorKind::Other, err)
+}
+
+// Load public certificate from file.
+fn load_certs(filename: &str) -> std::io::Result<Vec<rustls::Certificate>> {
+    // Open certificate file.
+    let certfile = std::fs::File::open(filename)
+        .map_err(|e| error(format!("failed to open {}: {}", filename, e)))?;
+    let mut reader = std::io::BufReader::new(certfile);
+
+    // Load and return certificate.
+    let certs = rustls_pemfile::certs(&mut reader)
+        .map_err(|_| error("failed to load certificate".into()))?;
+    Ok(certs
+        .into_iter()
+        .map(rustls::Certificate)
+        .collect())
+}
+
+// Load private key from file.
+fn load_private_key(filename: &str) -> std::io::Result<rustls::PrivateKey> {
+    // Open keyfile.
+    let keyfile = std::fs::File::open(filename)
+        .map_err(|e| error(format!("failed to open {}: {}", filename, e)))?;
+    let mut reader = std::io::BufReader::new(keyfile);
+
+    // Load and return a single private key.
+    let keys = rustls_pemfile::rsa_private_keys(&mut reader)
+        .map_err(|_| error("failed to load private key".into()))?;
+    if keys.len() != 1 {
+        return Err(error("expected a single private key".into()));
+    }
+
+    Ok(rustls::PrivateKey(keys[0].clone()))
 }
