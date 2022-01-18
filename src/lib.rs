@@ -5,6 +5,7 @@ pub mod comb;
 pub mod fold_channel;
 pub mod template;
 pub mod static_files;
+pub mod static_config;
 //pub mod owning_broadcast;
 pub mod card;
 pub mod bitcard;

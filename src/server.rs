@@ -6,6 +6,7 @@ use crate::viewstate::*;
 use crate::fold_channel;
 use crate::gamestate::{play_poker};
 use crate::bot_always_call::BotAlwaysCallInputSource;
+use crate::static_config::*;
 use crate::static_files::*;
 
 use ts_rs::{TS, export};
@@ -235,6 +236,7 @@ async fn shutdown_signal() {
 
 impl GameServer {
     pub async fn create_and_serve<'a>(table_rules: TableRules) {
+        let static_config = read_static_config();
         let static_files = StaticFiles::from_dir_path("ts/static");
         let server = Arc::new({
             //let (log_update_channel_t, log_update_channel_r) = watch::channel(());
@@ -245,12 +247,13 @@ impl GameServer {
             }
         });
 
-        let addr = "0.0.0.0:8080".parse::<SocketAddr>().unwrap();
+        let port = 8080;
+        let addr = format!("0.0.0.0:{}", port).parse::<SocketAddr>().unwrap();
         let tls_cfg = {
             // Load public certificate.
-            let certs = load_certs("examples/sample.pem").unwrap();
+            let certs = load_certs(&static_config.cert_path).unwrap();
             // Load private key.
-            let key = load_private_key("examples/sample.rsa").unwrap();
+            let key = load_private_key(&static_config.key_path).unwrap();
             // Do not use client certificate authentication.
             let mut cfg = rustls::ServerConfig::builder()
                 .with_safe_defaults()
@@ -288,7 +291,7 @@ impl GameServer {
             }))
             .with_graceful_shutdown(shutdown_signal());
 
-        println!("Serving on port 8080...");
+        println!("Serving on port {}...", port);
 
         http_server.await;
     }
