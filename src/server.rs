@@ -682,11 +682,22 @@ fn load_private_key(filename: &str) -> std::io::Result<rustls::PrivateKey> {
     let mut reader = std::io::BufReader::new(keyfile);
 
     // Load and return a single private key.
-    let keys = rustls_pemfile::rsa_private_keys(&mut reader)
+    let keys = rustls_pemfile::read_all(&mut reader)
         .map_err(|_| error("failed to load private key".into()))?;
     if keys.len() != 1 {
-        return Err(error("expected a single private key".into()));
+        return Err(error(format!("expected a single private key, got {}", keys.len())));
     }
 
-    Ok(rustls::PrivateKey(keys[0].clone()))
+    use rustls_pemfile::Item::*;
+    let key = match &keys[0] {
+        X509Certificate(_data) => None,
+        RSAKey(data) => Some(data.clone()),
+        PKCS8Key(data) => Some(data.clone()),
+    };
+
+    if let Some(key) = key {
+        Ok(rustls::PrivateKey(key))
+    } else {
+        Err(error(format!("expected a single private key, got cert")))
+    }
 }
