@@ -6,6 +6,8 @@ use pokerrs::gamestate::*;
 use pokerrs::cmdline::*;
 use pokerrs::table::*;
 use pokerrs::cmdline::*;
+use pokerrs::bot::*;
+use pokerrs::bot_easy::*;
 use pokerrs::bot_always_call::*;
 use pokerrs::fold_channel;
 use rand::prelude::*;
@@ -18,7 +20,7 @@ use std::io::{self, StdinLock, Stdin};
 #[tokio::main]
 async fn main() -> Result<(), PokerRoundError> {
     let mut player = CmdlineInputSource::new();
-    let mut bot = BotAlwaysCallInputSource::new();
+    let mut bot = BotInputSource::new(Arc::new(BotEasy::new()));
     let mut players = vec![(0, LivePlayer {
             player_id: "player".to_string(),
             chips: 20,

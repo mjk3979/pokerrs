@@ -45,7 +45,8 @@ pub struct PokerViewState {
     pub role: PlayerRole,
     pub players: HashMap<PlayerRole, PlayerViewState>,
     pub community_cards: Vec<CardViewState>,
-    pub bet_this_round: HashMap<PlayerRole, Chips>
+    pub bet_this_round: HashMap<PlayerRole, Chips>,
+    pub rules: SpecialRules,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -309,7 +310,7 @@ impl<P: Clone + Eq + Hash> PokerGlobalViewDiff<P> {
 pub type BetInvalidError = String;
 
 impl PokerViewState {
-    pub fn from_handstate_and_player(state: &HandState, player: PlayerRole) -> PokerViewState {
+    pub fn from_handstate_and_player(state: &HandState, rules: &SpecialRules, player: PlayerRole) -> PokerViewState {
         use Facing::*;
         use CardViewState::*;
         let players = state.players.iter().map(|(&role, player_state)| {
@@ -333,7 +334,8 @@ impl PokerViewState {
             role: player,
             players,
             community_cards,
-            bet_this_round
+            bet_this_round,
+            rules: rules.clone(),
         }
     }
 

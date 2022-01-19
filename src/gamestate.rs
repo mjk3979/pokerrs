@@ -437,14 +437,14 @@ fn collect_bets(players: &mut PlayersState, bets: &HashMap<PlayerRole, Chips>) {
     }
 }
 
-fn update_players<'a, 'b, 'c, 'd, 'e>(players: &'b HashMap<PlayerRole, LivePlayer>, ids: &'e HashMap<PlayerRole, PlayerId>, spectator_channel: &'c Option<fold_channel::Sender<Vec<PokerGlobalViewDiff<PlayerId>>, Vec<PokerGlobalViewDiff<PlayerId>>>>, state: &'b HandState, role_viewdiffs: &'b [PokerGlobalViewDiff<PlayerRole>], round: usize) {
+fn update_players<'a, 'b, 'c, 'd, 'e>(players: &'b HashMap<PlayerRole, LivePlayer>, ids: &'e HashMap<PlayerRole, PlayerId>, spectator_channel: &'c Option<fold_channel::Sender<Vec<PokerGlobalViewDiff<PlayerId>>, Vec<PokerGlobalViewDiff<PlayerId>>>>, state: &'b HandState, role_viewdiffs: &'b [PokerGlobalViewDiff<PlayerRole>], rules: &SpecialRules, round: usize) {
     if role_viewdiffs.is_empty() {
         return;
     }
     let viewdiffs: Vec<PokerGlobalViewDiff<PlayerId>> = role_viewdiffs.iter().map(|l| l.convert(ids)).collect();
     for (&role, player) in players.iter() {
         player.input.update(PokerViewUpdate {
-            viewstate: PokerViewState::from_handstate_and_player(&state, role),
+            viewstate: PokerViewState::from_handstate_and_player(&state, &rules, role),
             diff: vec![PokerLogUpdate {
                 round,
                 log: viewdiffs.iter().map(|viewdiff| TableViewDiff::GameDiff(viewdiff.player_diff(Some(&player.player_id)))).collect()
@@ -519,7 +519,7 @@ pub async fn play_poker<'a>(variant: PokerVariant,
     let ids = players.iter().map(|(role, p)| (*role, p.player_id.clone())).collect();
 
     loop {
-        update_players(&players, &ids, &spectator_channel, &state, &viewdiffs, round);
+        update_players(&players, &ids, &spectator_channel, &state, &viewdiffs, &rules, round);
         viewdiffs.clear();
         println!("Round");
         match state.cur_round {
@@ -540,14 +540,14 @@ pub async fn play_poker<'a>(variant: PokerVariant,
                         *retval.entry(role).or_insert(0) -= player.total_bet;
                     }
                     viewdiffs.push(PokerGlobalViewDiff::Common(PokerViewDiff::Winners(winners)));
-                    update_players(&players, &ids, &spectator_channel, &state, &viewdiffs, round);
+                    update_players(&players, &ids, &spectator_channel, &state, &viewdiffs, &rules, round);
                     viewdiffs.clear();
                     return Ok(retval);
                 } else if let Some(next_round) = state.rounds.pop() {
                     state.cur_round = Some(RoundState::new(&next_round));
                 } else {
                     show_cards(&variant, &mut state.players, &mut viewdiffs, hand_last_bet, state.community_cards, &rules);
-                    update_players(&players, &ids, &spectator_channel, &state, &viewdiffs, round);
+                    update_players(&players, &ids, &spectator_channel, &state, &viewdiffs, &rules, round);
                     viewdiffs.clear();
                     let winners = calc_winners(&variant, &state, &rules);
                     let mut retval = winners.totals();
@@ -555,7 +555,7 @@ pub async fn play_poker<'a>(variant: PokerVariant,
                         *retval.entry(role).or_insert(0) -= player.total_bet;
                     }
                     viewdiffs.push(PokerGlobalViewDiff::Common(PokerViewDiff::Winners(winners)));
-                    update_players(&players, &ids, &spectator_channel, &state, &viewdiffs, round);
+                    update_players(&players, &ids, &spectator_channel, &state, &viewdiffs, &rules, round);
                     viewdiffs.clear();
                     return Ok(retval);
                 }

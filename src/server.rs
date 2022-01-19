@@ -5,7 +5,9 @@ use crate::template::*;
 use crate::viewstate::*;
 use crate::fold_channel;
 use crate::gamestate::{play_poker};
-use crate::bot_always_call::BotAlwaysCallInputSource;
+use crate::bot::*;
+use crate::bot_always_call::*;
+use crate::bot_easy::*;
 use crate::static_config::*;
 use crate::static_files::*;
 
@@ -105,7 +107,7 @@ pub struct GameServerTable {
     table: Table,
     players: Mutex<HashMap<PlayerId, Arc<GameServerPlayerInputSource>>>,
     log_update_channel_r: fold_channel::Receiver<Vec<PokerGlobalViewDiff<PlayerId>>>,
-    bots: Mutex<Vec<Arc<BotAlwaysCallInputSource>>>,
+    bots: Mutex<Vec<Arc<BotInputSource>>>,
 }
 
 pub struct GameServer {
@@ -512,7 +514,7 @@ impl GameServer {
                 if let Some(table) = self.table_from_params(&params) {
                     let (player_id, new_bot) = {
                         let mut bots = table.bots.lock().unwrap();
-                        let bot = Arc::new(BotAlwaysCallInputSource::new());
+                        let bot = Arc::new(BotInputSource::new(Arc::new(BotEasy::new())));
                         bots.push(bot.clone());
                         (format!("bot{}", bots.len()), bot)
                     };
