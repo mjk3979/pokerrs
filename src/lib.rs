@@ -20,6 +20,7 @@ pub mod cmdline;
 pub mod bot;
 pub mod bot_always_call;
 pub mod bot_easy;
+pub mod bot_medium;
 pub mod verified_deck;
 pub mod server;
 pub mod http_client;

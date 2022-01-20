@@ -3,6 +3,7 @@ use serde::{Serialize, Deserialize};
 #[derive(Debug, Clone, Eq, PartialEq)]
 #[derive(Serialize, Deserialize)]
 pub struct StaticConfig {
+    pub tls: bool,
     pub cert_path: String,
     pub key_path: String,
 }

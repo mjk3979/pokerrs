@@ -8,6 +8,7 @@ use crate::gamestate::{play_poker};
 use crate::bot::*;
 use crate::bot_always_call::*;
 use crate::bot_easy::*;
+use crate::bot_medium::*;
 use crate::static_config::*;
 use crate::static_files::*;
 
@@ -251,51 +252,67 @@ impl GameServer {
 
         let port = 8080;
         let addr = format!("0.0.0.0:{}", port).parse::<SocketAddr>().unwrap();
-        let tls_cfg = {
-            // Load public certificate.
-            let certs = load_certs(&static_config.cert_path).unwrap();
-            // Load private key.
-            let key = load_private_key(&static_config.key_path).unwrap();
-            // Do not use client certificate authentication.
-            let mut cfg = rustls::ServerConfig::builder()
-                .with_safe_defaults()
-                .with_no_client_auth()
-                .with_single_cert(certs, key)
-                .map_err(|e| error(format!("{}", e))).unwrap();
-            // Configure ALPN to accept HTTP/2, HTTP/1.1 in that order.
-            cfg.alpn_protocols = vec![b"h2".to_vec(), b"http/1.1".to_vec()];
-            std::sync::Arc::new(cfg)
-        };
-        let tls_acceptor = TlsAcceptor::from(tls_cfg);
-        let tcp = TcpListener::bind(&addr).await.unwrap();
-        let incoming_tls_stream = stream! {
-            loop {
-                let (socket, _) = tcp.accept().await?;
-                let stream = tls_acceptor.accept(socket);
-                if let Ok(s) = stream.await {
-                    let retval: Result<_, std::io::Error> = Ok(s);
-                    yield retval;
-                }
-            }
-        };
-        let acceptor = accept::from_stream(incoming_tls_stream);
-        let http_server = Server::builder(acceptor)
-            .serve(make_service_fn(|conn| {
-                let cserver = server.clone();
-                async move {
+        if static_config.tls {
+            let tls_cfg = { 
+                // Load public certificate.
+                let certs = load_certs(&static_config.cert_path).unwrap();
+                // Load private key.
+                let key = load_private_key(&static_config.key_path).unwrap();
+                // Do not use client certificate authentication.
+                let mut cfg = rustls::ServerConfig::builder()
+                    .with_safe_defaults()
+                    .with_no_client_auth()
+                    .with_single_cert(certs, key)
+                    .map_err(|e| error(format!("{}", e))).unwrap();
+                // Configure ALPN to accept HTTP/2, HTTP/1.1 in that order.
+                cfg.alpn_protocols = vec![b"h2".to_vec(), b"http/1.1".to_vec()];
+                std::sync::Arc::new(cfg)
+            };
+            let tls_acceptor = TlsAcceptor::from(tls_cfg);
+            let tcp = TcpListener::bind(&addr).await.unwrap();
+            let http_server = Server::builder(
+                accept::from_stream(stream! {
+                    loop {
+                        let (socket, _) = tcp.accept().await?;
+                        let stream = tls_acceptor.accept(socket);
+                        if let Ok(s) = stream.await {
+                            let retval: Result<_, std::io::Error> = Ok(s);
+                            yield retval;
+                        }
+                    }
+                }))
+                .serve(make_service_fn(|conn| {
+                    let cserver = server.clone();
+                    async move {
                     Ok::<_, Infallible>(service_fn(move |req| {
                         let server = cserver.clone();
                         async move {
-                            server.serve(req).await
+                        server.serve(req).await
                         }
-                    }))
-                }
-            }))
-            .with_graceful_shutdown(shutdown_signal());
+                        }))
+                    }
+                }))
+                .with_graceful_shutdown(shutdown_signal());
+            println!("Serving on port {}...", port);
+            http_server.await;
+        } else {
+            let http_server = Server::bind(&addr)
+                .serve(make_service_fn(|conn| {
+                    let cserver = server.clone();
+                    async move {
+                    Ok::<_, Infallible>(service_fn(move |req| {
+                        let server = cserver.clone();
+                        async move {
+                        server.serve(req).await
+                        }
+                        }))
+                    }
+                }))
+                .with_graceful_shutdown(shutdown_signal());
+            println!("Serving on port {}...", port);
+            http_server.await;
+        };
 
-        println!("Serving on port {}...", port);
-
-        http_server.await;
     }
         
     pub async fn notify_player<'a>(&'a self, table: Arc<GameServerTable>, player_id: PlayerId, start_from: usize, known_action_requested: Option<ServerActionRequest>) -> (Vec<PokerLogUpdate>, ServerPlayer) {
@@ -512,9 +529,16 @@ impl GameServer {
             },
             (&Method::POST, "/add_bot") => {
                 if let Some(table) = self.table_from_params(&params) {
+                    let bot_skill = params.get("bot_skill").map(|s| s.parse::<u32>().ok()).flatten().unwrap_or(0);
                     let (player_id, new_bot) = {
                         let mut bots = table.bots.lock().unwrap();
-                        let bot = Arc::new(BotInputSource::new(Arc::new(BotEasy::new())));
+                        let new_bot: Arc<dyn Bot> = match bot_skill {
+                            0 => Arc::new(BotAlwaysCall::new()),
+                            1 => Arc::new(BotEasy::new()),
+                            2 => Arc::new(BotMedium::new()),
+                            _ => Arc::new(BotMedium::new()),
+                        };
+                        let bot = Arc::new(BotInputSource::new(new_bot));
                         bots.push(bot.clone());
                         (format!("bot{}", bots.len()), bot)
                     };

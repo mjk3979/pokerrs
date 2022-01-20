@@ -556,8 +556,8 @@ function start_server() {
     });
 }
 
-function add_bot() {
-    fetch(`/add_bot?table_id=${current_table_id}`, {
+function add_bot(skill: number) {
+    fetch(`/add_bot?table_id=${current_table_id}&bot_skill=${skill}`, {
         method: 'POST'
     });
 }
@@ -700,7 +700,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const prev_round_button = document.getElementById("prev_round_button")!;
     const next_round_button = document.getElementById("next_round_button")!;
     const start_server_button = document.getElementById("start_server_button")!;
-    const add_bot_button = document.getElementById("add_bot_button")!;
+    const add_easy_bot_button = document.getElementById("add_easy_bot_button")!;
+    const add_medium_bot_button = document.getElementById("add_medium_bot_button")!;
     const add_variant_button = document.getElementById("settings_add_variant_button")!;
     const remove_variant_button = document.getElementById("settings_remove_variant_button")!;
     const table_settings_modal = document.getElementById("table_settings_modal")!;
@@ -727,8 +728,11 @@ document.addEventListener('DOMContentLoaded', () => {
     start_server_button.addEventListener('click', () => {
         start_server();
     });
-    add_bot_button.addEventListener('click', () => {
-        add_bot();
+    add_easy_bot_button.addEventListener('click', () => {
+        add_bot(1);
+    });
+    add_medium_bot_button.addEventListener('click', () => {
+        add_bot(2);
     });
     add_variant_button.addEventListener('click', () => {
         change_variant_clicked('add');

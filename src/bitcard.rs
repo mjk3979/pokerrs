@@ -321,6 +321,16 @@ impl std::fmt::Debug for CardTuple {
     }
 }
 
+impl std::ops::Add for CardTuple {
+    type Output = CardTuple;
+    fn add(mut self, rhs: CardTuple) -> CardTuple {
+        for card in rhs.iter() {
+            self.push(card);
+        }
+        self
+    }
+}
+
 mod test {
     use crate::bitcard::*;
     use crate::card::*;
