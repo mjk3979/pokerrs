@@ -68,7 +68,7 @@ function make_card(card: CardViewState): HTMLElement {
     let img = document.createElement("img");
     switch(card.kind) {
         case "Visible": {
-            let suit = ["Spade", "Heart", "Diamond", "Club"][card.data.card.suit];
+            let suit = ["S", "H", "D", "C"][card.data.card.suit];
             let rank = (() => {
                 const nrank = card.data.card.rank;
                 if (nrank == 0) {
@@ -79,12 +79,12 @@ function make_card(card: CardViewState): HTMLElement {
                     return ["J", "Q", "K"][nrank-10];
                 }
             })();
-            img.src = `card_images/200px-Cards-${rank}-${suit}.svg.png`;
+            img.src = `card_images/155px-Minicard_${rank}${suit}.svg.png`;
             img.alt = `${rank} of ${suit}s`;
             break;
         }
         case "Invisible": {
-            img.src = `card_images/200px-card-back.png`;
+            img.src = `card_images/Minicard_back.svg.png`
             img.alt = "Back of card";
             break;
         }

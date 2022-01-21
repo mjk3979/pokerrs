@@ -46,6 +46,8 @@ pub struct PokerViewState {
     pub players: HashMap<PlayerRole, PlayerViewState>,
     pub community_cards: Vec<CardViewState>,
     pub bet_this_round: HashMap<PlayerRole, Chips>,
+
+    #[serde(skip_serializing)]
     pub rules: SpecialRules,
 }
 
