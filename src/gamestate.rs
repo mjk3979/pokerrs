@@ -465,28 +465,33 @@ pub fn show_cards(variant: &PokerVariant,
     community_cards: CardTuple,
     rules: &SpecialRules,
     ){
+    if players.values().filter(|p| !p.folded).count() < 2 {
+        return;
+    }
     // last best and then to the left
     let starting = last_bet.unwrap_or(0); // todo who actually goes first?
     let num_players = players.len();
     let mut role = starting;
     loop {
         let player = players.get_mut(&role).unwrap();
-        let mut shown = Vec::new();
-        for (idx, cs) in player.hand.iter_mut().enumerate() {
-            if Facing::FaceDown == cs.facing {
-                cs.facing = Facing::FaceUp;
-                shown.push((idx, CardViewState::Visible(cs.clone())));
+        if !player.folded {
+            let mut shown = Vec::new();
+            for (idx, cs) in player.hand.iter_mut().enumerate() {
+                if Facing::FaceDown == cs.facing {
+                    cs.facing = Facing::FaceUp;
+                    shown.push((idx, CardViewState::Visible(cs.clone())));
+                }
             }
-        }
-        if !shown.is_empty() {
-            let strength = combinations(&player.hand, variant.use_from_hand).into_iter().map(|combo| {
-                best_hand(combo.iter().map(|cs| cs.card).collect(), community_cards.clone(), 5, rules)
-            }).max().unwrap();
-            viewdiffs.push(PokerGlobalViewDiff::Common(PokerViewDiff::ShowCards {
-                player: role,
-                shown,
-                strength
-            }));
+            if !shown.is_empty() {
+                let strength = combinations(&player.hand, variant.use_from_hand).into_iter().map(|combo| {
+                    best_hand(combo.iter().map(|cs| cs.card).collect(), community_cards.clone(), 5, rules)
+                }).max().unwrap();
+                viewdiffs.push(PokerGlobalViewDiff::Common(PokerViewDiff::ShowCards {
+                    player: role,
+                    shown,
+                    strength
+                }));
+            }
         }
         // end
         role = next_player(role, num_players);
