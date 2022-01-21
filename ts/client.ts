@@ -84,7 +84,7 @@ function make_card(card: CardViewState): HTMLElement {
             break;
         }
         case "Invisible": {
-            img.src = `card_images/Minicard_back.svg.png`
+            img.src = `card_images/155px-Minicard_back.svg.png`;
             img.alt = "Back of card";
             break;
         }
