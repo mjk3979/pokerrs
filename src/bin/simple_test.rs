@@ -33,7 +33,7 @@ async fn main() -> Result<(), PokerRoundError> {
         })
     ].into_iter().collect();
     let table_rules = TableRules {
-        ante: AnteRule::Ante(1),
+        ante: AnteRule::Blinds(vec![Blind{amount: 1}, Blind{amount: 2}]),
         ante_name: "ante".to_string(),
         min_bet: 1
     };

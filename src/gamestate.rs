@@ -82,12 +82,19 @@ pub struct PlayerState {
 
 type PlayersState = HashMap<PlayerRole, PlayerState>;
 
+pub struct BetState {
+    pub player: PlayerRole,
+    pub last_bet: Option<(PlayerRole, Chips)>,
+    pub all_bets: HashMap<PlayerRole, Chips>,
+}
+
 pub struct HandState {
     pub deck: Mutex<Box<dyn Deck + Send>>,
     pub rounds: Vec<Round>,
     pub cur_round: Option<RoundState>,
     pub players: HashMap<PlayerRole, PlayerState>,
     pub community_cards: CardTuple,
+    pub pending_bet: Option<BetState>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, PartialOrd, Ord, Serialize, Deserialize)]
@@ -402,7 +409,7 @@ fn next_player(current_role: PlayerRole, num_players: usize) -> PlayerRole {
     return new_player;
 }
 
-fn collect_ante_from_players(rule: &AnteRule, players: &mut HashMap<PlayerRole, PlayerState>, viewdiffs: &mut Vec<PokerGlobalViewDiff<PlayerRole>>) {
+fn collect_ante_from_players(rule: &AnteRule, players: &mut HashMap<PlayerRole, PlayerState>, viewdiffs: &mut Vec<PokerGlobalViewDiff<PlayerRole>>) -> Option<BetState> {
     use AnteRule::*;
     match rule {
         Ante(ante) => {
@@ -412,6 +419,7 @@ fn collect_ante_from_players(rule: &AnteRule, players: &mut HashMap<PlayerRole, 
                 player.total_bet += to_collect;
                 viewdiffs.push(PokerGlobalViewDiff::Common(PokerViewDiff::from_blind_name(to_collect, *role, "ante".to_string())));
             }
+            None
         }
         Blinds(blinds) => {
             let mut blind_starting_player = 0;
@@ -419,14 +427,23 @@ fn collect_ante_from_players(rule: &AnteRule, players: &mut HashMap<PlayerRole, 
                 blind_starting_player = 1;
             }
             let mut blind_role = blind_starting_player;
+            let mut last = None;
+            let mut all_bets = HashMap::new();
             for &Blind{amount} in blinds {
                 let player = players.get_mut(&blind_role).unwrap();
                 let chips = player.chips;
                 let to_collect = std::cmp::min(chips, amount);
-                player.total_bet += to_collect;
+                //player.total_bet += to_collect;
+                last = Some((blind_role, amount));
+                all_bets.insert(blind_role, to_collect);
                 viewdiffs.push(PokerGlobalViewDiff::Common(PokerViewDiff::from_blind_name(to_collect, blind_role, "blind".to_string())));
                 blind_role = next_player(blind_role, players.len());
             }
+            last.map(|(last_blind_role, amount)| BetState {
+                player: blind_role,
+                last_bet: Some((last_blind_role, amount)),
+                all_bets
+            })
         }
     }
 }
@@ -516,6 +533,7 @@ pub async fn play_poker<'a>(variant: PokerVariant,
         cur_round: None,
         players: players.iter().map(|(&e, p)| (e, PlayerState{chips: p.chips, hand: Vec::new(), folded: false, total_bet: 0})).collect(),
         community_cards: CardTuple::new(),
+        pending_bet: None,
     };
 
     let num_players = players.len();
@@ -549,7 +567,15 @@ pub async fn play_poker<'a>(variant: PokerVariant,
                     viewdiffs.clear();
                     return Ok(retval);
                 } else if let Some(next_round) = state.rounds.pop() {
-                    state.cur_round = Some(RoundState::new(&next_round));
+                    let mut new_round = RoundState::new(&next_round);
+                    if let RoundState::Bet{..} = new_round {
+                        if let Some(BetState{player, last_bet, all_bets}) = state.pending_bet.take() {
+                            println!("pending bet: {:?} {:?}", player, last_bet);
+                            new_round = RoundState::Bet{player, last_bet, all_bets};
+                        }
+                    }
+
+                    state.cur_round = Some(new_round);
                 } else {
                     show_cards(&variant, &mut state.players, &mut viewdiffs, hand_last_bet, state.community_cards, &rules);
                     update_players(&players, &ids, &spectator_channel, &state, &viewdiffs, &rules, round);
@@ -569,7 +595,7 @@ pub async fn play_poker<'a>(variant: PokerVariant,
                 use RoundState::*;
                 match round_state {
                     Ante => {
-                        collect_ante_from_players(&table_rules.ante, &mut state.players, &mut viewdiffs);
+                        state.pending_bet = collect_ante_from_players(&table_rules.ante, &mut state.players, &mut viewdiffs);
                         state.cur_round = None;
                     },
                     DrawToHand{facing} => {
@@ -938,6 +964,7 @@ mod test {
             cur_round: None,
             players,
             community_cards: CardTuple::new(),
+            pending_bet: None,
         }
     }
 
