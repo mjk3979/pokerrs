@@ -246,3 +246,45 @@ pub fn win_ratio(state: &PokerViewState, call_amount: Chips, min_bet: Chips) -> 
     }
     (won as f64) / (total as f64)
 }
+
+mod test {
+    use crate::bot::*;
+    use crate::viewstate::*;
+
+    fn make_cards(tups: &[(usize, Rank)]) -> Vec<CardViewState> {
+        tups.iter().map(|(suit, rank)| CardViewState::Visible(CardState {
+            card: Card {
+                rank: *rank,
+                suit: Suit(*suit),
+            },
+            facing: Facing::FaceUp,
+        })).collect()
+    }
+
+    #[test]
+    fn test_all_hands() {
+        let players = vec![(0, PlayerViewState {
+                chips: 100,
+                total_bet: 1,
+                hand: make_cards(&vec![(2, 0), (3, 0), (0, NUM_RANKS-1), (1, NUM_RANKS-1)]),
+            }),
+            (1, PlayerViewState {
+                chips: 100,
+                total_bet: 1,
+                hand: std::iter::repeat(CardViewState::Invisible).take(4).collect(),
+            }),
+        ].into_iter().collect();
+
+        let vs = PokerViewState {
+            role: 0,
+            players,
+            community_cards: make_cards(&vec![(0, 0), (1, 0), (0, 1), (0, 9), (2, 5)]),
+            bet_this_round: HashMap::new(),
+            rules: Vec::new(),
+        };
+
+        let hands = all_hands(&vs);
+        println!("{}", hands.len());
+        assert!(!hands.is_empty());
+    }
+}
