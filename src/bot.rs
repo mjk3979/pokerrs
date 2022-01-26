@@ -212,13 +212,19 @@ where I: IntoIterator<Item = &'a usize, IntoIter=It> {
     let mut stack = vec![(cards, num_each, Vec::new())];
     while let Some((cards_left, mut num_each, mut combos)) = stack.pop() {
         if let Some(num) = num_each.next() {
+            if *num == 0 {
+                combos.push(CardTuple::new());
+                stack.push((cards_left, num_each, combos));
+                continue;
+            }
             for combo in combinations(cards_left.iter(), *num) {
                 let mut new_cards_left = cards_left;
                 for card in combo.iter() {
                     new_cards_left.remove(*card);
                 }
-                combos.push(combo.into_iter().collect());
-                stack.push((new_cards_left, num_each.clone(), combos.clone()));
+                let mut new_combos = combos.clone();
+                new_combos.push(combo.into_iter().collect());
+                stack.push((new_cards_left, num_each.clone(), new_combos));
             }
         } else {
             retval.push(combos);
