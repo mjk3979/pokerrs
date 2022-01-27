@@ -29,7 +29,12 @@ impl<T: Clone, It: Iterator<Item=T> + Clone> Iterator for Combinations<T, It> {
     type Item = Vec<T>;
     fn next(&mut self) -> Option<Self::Item> {
         if self.p == 0 {
-            return None;
+            if self.stack.is_empty() {
+                return None;
+            } else {
+                self.stack.pop();
+                return Some(Vec::new());
+            }
         }
         if self.combo.len() == self.p {
             self.combo.pop();

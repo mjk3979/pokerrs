@@ -145,7 +145,10 @@ pub fn bet_risk_factor(state: &PokerViewState, call_amount: Chips, min_bet: Chip
     }
 }
 
-pub fn all_hands(state: &PokerViewState) -> Vec<(CardTuple, Vec<CardTuple>)> {
+pub fn win_ratio(state: &PokerViewState) -> f64 {
+    let mut won: u64 = 0;
+    let mut total: u64 = 0;
+
     let mut cards_left: CardSet = standard_deck().raw.into_iter().collect();
     let mut community_hidden = 0;
     let mut community_visible: CardTuple = CardTuple::new();
@@ -158,20 +161,19 @@ pub fn all_hands(state: &PokerViewState) -> Vec<(CardTuple, Vec<CardTuple>)> {
         }
     }
 
-    let mut players: Vec<(CardTuple, usize)> = Vec::new();
-    let mut visible: CardTuple = CardTuple::new();
-    let mut hidden = 0;
-    let mut total_hidden = 0;
+    let mut my_visible: CardTuple = CardTuple::new();
+    let mut my_hidden = 0;
     for cv in &state.players.get(&state.role).unwrap().hand {
         if let CardViewState::Visible(cs) = cv {
-            visible.push(cs.card);
+            my_visible.push(cs.card);
             cards_left.remove(cs.card);
         } else {
-            hidden += 1;
+            my_hidden += 1;
         }
     }
-    players.push((visible, hidden));
-    total_hidden += hidden;
+
+    let mut players: Vec<(CardTuple, usize)> = Vec::new();
+    let mut max_player_hidden = 0;
     for (role, player) in &state.players {
         if *role == state.role {
             continue;
@@ -187,69 +189,46 @@ pub fn all_hands(state: &PokerViewState) -> Vec<(CardTuple, Vec<CardTuple>)> {
             }
         }
         players.push((visible, hidden));
-        total_hidden += hidden;
+        max_player_hidden = std::cmp::max(hidden, max_player_hidden);
     }
 
-    let mut num_each = vec![community_hidden];
-    for (_, hidden) in &players {
-        num_each.push(*hidden);
-    }
-    let mut retval = Vec::new();
-    for hidden_set in repeated_combinations(cards_left, &num_each) {
-        let community = community_visible.clone() + hidden_set[0];
-        let hands = players.iter().enumerate().map(|(idx, (visible, _))| {
-            *visible + hidden_set[idx+1]
-        }).collect();
-        retval.push((community, hands));
-    }
-    retval
-}
+    for community_combo in combinations(cards_left.iter(), community_hidden) {
+        let mut community = community_visible;
+        let mut cards_left = cards_left;
+        for card in community_combo {
+            community.push(card);
+            cards_left.remove(card);
+        }
 
-fn repeated_combinations<'a, I, It: Iterator<Item=&'a usize> + Clone>(cards: CardSet, num_each: I) -> Vec<Vec<CardTuple>>
-where I: IntoIterator<Item = &'a usize, IntoIter=It> {
-    let mut num_each = num_each.into_iter();
-    let mut retval = Vec::new();
-    let mut stack = vec![(cards, num_each, Vec::new())];
-    while let Some((cards_left, mut num_each, mut combos)) = stack.pop() {
-        if let Some(num) = num_each.next() {
-            if *num == 0 {
-                combos.push(CardTuple::new());
-                stack.push((cards_left, num_each, combos));
-                continue;
+        let my_combos = combinations(cards_left.iter(), my_hidden);
+        
+        for my_combo in my_combos {
+            let mut my_hand = my_visible;
+            let mut cards_left = cards_left;
+            for card in my_combo {
+                my_hand.push(card);
+                cards_left.remove(card);
             }
-            for combo in combinations(cards_left.iter(), *num) {
-                let mut new_cards_left = cards_left;
-                for card in combo.iter() {
-                    new_cards_left.remove(*card);
+
+            let player_combos = combinations(cards_left.iter(), max_player_hidden);
+
+            let my_best = best_hand_use_from_hand(state.variant.use_from_hand, my_hand, community, 5, &state.rules);
+            for player_combo in player_combos {
+                for (visible, hidden) in &players {
+                    total += 1;
+                    let mut player_hand = *visible;
+                    for card in &player_combo[..*hidden] {
+                        player_hand.push(*card);
+                    }
+                    let player_best = best_hand_use_from_hand(state.variant.use_from_hand, player_hand, community, 5, &state.rules);
+                    if my_best > player_best {
+                        won += 1;
+                    }
                 }
-                let mut new_combos = combos.clone();
-                new_combos.push(combo.into_iter().collect());
-                stack.push((new_cards_left, num_each.clone(), new_combos));
             }
-        } else {
-            retval.push(combos);
         }
     }
-    retval
-}
 
-pub fn win_ratio(state: &PokerViewState, call_amount: Chips, min_bet: Chips) -> f64 {
-    let mut won: u64 = 0;
-    let mut total: u64 = 0;
-    for (community, hands) in all_hands(state) {
-        total += 1;
-        let my_best = best_hand(hands[0], community, 5, &state.rules);
-        let mut beaten = false;
-        for &hand in &hands[1..] {
-            if my_best < best_hand(hand, community, 5, &state.rules) {
-                beaten = true;
-                break;
-            }
-        }
-        if !beaten {
-            won += 1;
-        }
-    }
     (won as f64) / (total as f64)
 }
 
@@ -268,7 +247,7 @@ mod test {
     }
 
     #[test]
-    fn test_all_hands() {
+    fn test_win_ratio() {
         let players = vec![(0, PlayerViewState {
                 chips: 100,
                 total_bet: 1,
@@ -287,10 +266,14 @@ mod test {
             community_cards: make_cards(&vec![(0, 0), (1, 0), (0, 1), (0, 9), (2, 5)]),
             bet_this_round: HashMap::new(),
             rules: Vec::new(),
+            variant: PokerVariantViewState {
+                use_from_hand: 2
+            },
         };
 
-        let hands = all_hands(&vs);
-        println!("{}", hands.len());
-        assert!(!hands.is_empty());
+        let r = win_ratio(&vs);
+        assert!(r >= 0.0);
+        assert!(r <= 1.0);
     }
+
 }

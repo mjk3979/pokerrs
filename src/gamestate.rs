@@ -212,6 +212,33 @@ fn explode_aces(cards: CardTuple) -> CardTuple {
     retval
 }
 
+pub fn aces_combos(cards: CardTuple) -> Vec<CardTuple> {
+    let mut non_aces = CardTuple::new();
+    let mut ace_suits = Vec::new();
+    for card in cards.iter() {
+        if card.rank == 0 {
+            ace_suits.push(card.suit);
+        } else {
+            non_aces.push(card);
+        }
+    }
+    let mut retval = Vec::new();
+    let mut stack = vec![(non_aces, ace_suits.iter())];
+    while let Some((cur, mut ace_suits)) = stack.pop() {
+        if let Some(suit) = ace_suits.next().copied() {
+            let mut next = cur;
+            next.push(Card{rank: 0, suit});
+            stack.push((next, ace_suits.clone()));
+            let mut next = cur;
+            next.push(Card{rank: NUM_RANKS, suit});
+            stack.push((next, ace_suits.clone()));
+        } else {
+            retval.push(cur);
+        }
+    }
+    retval
+}
+
 pub fn best_hand(hand: CardTuple, community: CardTuple, hand_size: usize, rules: &SpecialRules) -> HandStrength {
     for rule in rules {
         if rule.wtype == SpecialCardType::WinsItAll {
@@ -241,7 +268,8 @@ pub fn best_hand(hand: CardTuple, community: CardTuple, hand_size: usize, rules:
         unwild.push(card);
     }
 
-    let mut wild_combos = vec![all_cards.clone()];
+    //let mut wild_combos = vec![all_cards.clone()];
+    let mut wild_combos = Vec::new();
 
     for wilds in combinations_with_replacement(standard_deck().raw, num_wild) {
         let mut wild_hand = unwild.clone();
@@ -251,20 +279,8 @@ pub fn best_hand(hand: CardTuple, community: CardTuple, hand_size: usize, rules:
         wild_combos.push(wild_hand);
     }
     wild_combos.into_iter().filter_map(|wild_hand| {
-        combinations(explode_aces(wild_hand).iter(), hand_size).into_iter().filter_map(|v|{
-            let combo: CardTuple = v.into_iter().collect();
-            let mut ace_suits: u8 = 0;
-            for card in combo.iter() {
-                if card.rank == 0 || card.rank == NUM_RANKS {
-                    let Suit(suit) = card.suit;
-                    if (ace_suits & (1 << suit)) != 0 {
-                        return None;
-                    } else {
-                        ace_suits |= (1 << suit);
-                    }
-                }
-            }
-            Some(HandStrength::new(combo, hand_size))
+        aces_combos(wild_hand).into_iter().filter_map(|v|{
+            Some(HandStrength::new(v, hand_size))
         }).max()
     }).max().unwrap()
 }
@@ -362,6 +378,12 @@ impl<P: Clone + Eq + Hash> Subpot<P> {
     }
 }
 
+pub fn best_hand_use_from_hand(use_from_hand: usize, hand: CardTuple, community: CardTuple, hand_size: usize, rules: &SpecialRules) -> HandStrength {
+    combinations(hand.iter(), use_from_hand).into_iter().map(|combo| {
+        best_hand(combo.into_iter().collect(), community, 5, rules)
+    }).max().unwrap()
+}
+
 fn calc_winners(variant: &PokerVariant, state: &HandState, rules: &SpecialRules) -> Winners<PlayerRole> {
     // calculate best hands for each player
     let best_hands: HashMap<PlayerRole, HandStrength> = state.players.iter().filter_map(|(&role, player)| {
@@ -454,14 +476,14 @@ fn collect_bets(players: &mut PlayersState, bets: &HashMap<PlayerRole, Chips>) {
     }
 }
 
-fn update_players<'a, 'b, 'c, 'd, 'e>(players: &'b HashMap<PlayerRole, LivePlayer>, ids: &'e HashMap<PlayerRole, PlayerId>, spectator_channel: &'c Option<fold_channel::Sender<Vec<PokerGlobalViewDiff<PlayerId>>, Vec<PokerGlobalViewDiff<PlayerId>>>>, state: &'b HandState, role_viewdiffs: &'b [PokerGlobalViewDiff<PlayerRole>], rules: &SpecialRules, round: usize) {
+fn update_players<'a, 'b, 'c, 'd, 'e>(players: &'b HashMap<PlayerRole, LivePlayer>, ids: &'e HashMap<PlayerRole, PlayerId>, spectator_channel: &'c Option<fold_channel::Sender<Vec<PokerGlobalViewDiff<PlayerId>>, Vec<PokerGlobalViewDiff<PlayerId>>>>, state: &'b HandState, role_viewdiffs: &'b [PokerGlobalViewDiff<PlayerRole>], rules: &SpecialRules, variant: &PokerVariant, round: usize) {
     if role_viewdiffs.is_empty() {
         return;
     }
     let viewdiffs: Vec<PokerGlobalViewDiff<PlayerId>> = role_viewdiffs.iter().map(|l| l.convert(ids)).collect();
     for (&role, player) in players.iter() {
         player.input.update(PokerViewUpdate {
-            viewstate: PokerViewState::from_handstate_and_player(&state, &rules, role),
+            viewstate: PokerViewState::from_handstate_and_player(&state, &variant, &rules, role),
             diff: vec![PokerLogUpdate {
                 round,
                 log: viewdiffs.iter().map(|viewdiff| TableViewDiff::GameDiff(viewdiff.player_diff(Some(&player.player_id)))).collect()
@@ -542,7 +564,7 @@ pub async fn play_poker<'a>(variant: PokerVariant,
     let ids = players.iter().map(|(role, p)| (*role, p.player_id.clone())).collect();
 
     loop {
-        update_players(&players, &ids, &spectator_channel, &state, &viewdiffs, &rules, round);
+        update_players(&players, &ids, &spectator_channel, &state, &viewdiffs, &rules, &variant, round);
         viewdiffs.clear();
         println!("Round");
         match state.cur_round {
@@ -563,7 +585,7 @@ pub async fn play_poker<'a>(variant: PokerVariant,
                         *retval.entry(role).or_insert(0) -= player.total_bet;
                     }
                     viewdiffs.push(PokerGlobalViewDiff::Common(PokerViewDiff::Winners(winners)));
-                    update_players(&players, &ids, &spectator_channel, &state, &viewdiffs, &rules, round);
+                    update_players(&players, &ids, &spectator_channel, &state, &viewdiffs, &rules, &variant, round);
                     viewdiffs.clear();
                     return Ok(retval);
                 } else if let Some(next_round) = state.rounds.pop() {
@@ -578,7 +600,7 @@ pub async fn play_poker<'a>(variant: PokerVariant,
                     state.cur_round = Some(new_round);
                 } else {
                     show_cards(&variant, &mut state.players, &mut viewdiffs, hand_last_bet, state.community_cards, &rules);
-                    update_players(&players, &ids, &spectator_channel, &state, &viewdiffs, &rules, round);
+                    update_players(&players, &ids, &spectator_channel, &state, &viewdiffs, &rules, &variant, round);
                     viewdiffs.clear();
                     let winners = calc_winners(&variant, &state, &rules);
                     let mut retval = winners.totals();
@@ -586,7 +608,7 @@ pub async fn play_poker<'a>(variant: PokerVariant,
                         *retval.entry(role).or_insert(0) -= player.total_bet;
                     }
                     viewdiffs.push(PokerGlobalViewDiff::Common(PokerViewDiff::Winners(winners)));
-                    update_players(&players, &ids, &spectator_channel, &state, &viewdiffs, &rules, round);
+                    update_players(&players, &ids, &spectator_channel, &state, &viewdiffs, &rules, &variant, round);
                     viewdiffs.clear();
                     return Ok(retval);
                 }

@@ -13,7 +13,7 @@ impl Bot for BotMedium {
         let risk_factor = if pocket_threes(state) {
             CallAny
         } else {
-            let r = win_ratio(state, call_amount, min_bet);
+            let r = win_ratio(state);
             PotRatio(r)
         };
         bet_risk_factor(state, call_amount, min_bet, risk_factor)
