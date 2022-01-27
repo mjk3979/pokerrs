@@ -244,7 +244,7 @@ impl DoubleEndedIterator for RankTupleIter {
 
 impl ExactSizeIterator for RankTupleIter {
     fn len(&self) -> usize {
-        self.ridx - self.idx + 1
+        self.ridx + 1 - self.idx
     }
 }
 
