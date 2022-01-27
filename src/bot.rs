@@ -276,4 +276,33 @@ mod test {
         assert!(r <= 1.0);
     }
 
+    #[test]
+    fn test_win_ratio_empty_community() {
+        let players = vec![(0, PlayerViewState {
+                chips: 100,
+                total_bet: 1,
+                hand: make_cards(&vec![(2, 0), (3, 0), (0, NUM_RANKS-1), (1, NUM_RANKS-1)]),
+            }),
+            (1, PlayerViewState {
+                chips: 100,
+                total_bet: 1,
+                hand: std::iter::repeat(CardViewState::Invisible).take(4).collect(),
+            }),
+        ].into_iter().collect();
+
+        let vs = PokerViewState {
+            role: 0,
+            players,
+            community_cards: Vec::new(),
+            bet_this_round: HashMap::new(),
+            rules: Vec::new(),
+            variant: PokerVariantViewState {
+                use_from_hand: 2
+            },
+        };
+
+        let r = win_ratio(&vs);
+        assert!(r >= 0.0);
+        assert!(r <= 1.0);
+    }
 }
