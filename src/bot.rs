@@ -145,7 +145,7 @@ pub fn bet_risk_factor(state: &PokerViewState, call_amount: Chips, min_bet: Chip
     }
 }
 
-fn all_hands(state: &PokerViewState) -> Vec<(CardTuple, Vec<CardTuple>)> {
+pub fn all_hands(state: &PokerViewState) -> Vec<(CardTuple, Vec<CardTuple>)> {
     let mut cards_left: CardSet = standard_deck().raw.into_iter().collect();
     let mut community_hidden = 0;
     let mut community_visible: CardTuple = CardTuple::new();
