@@ -109,8 +109,8 @@ impl HandStrength {
         // Reorganize to make calculating easy
         let mut ranks: RankTuple = cards.into();
         ranks.sort();
-        let is_straight = (1..hand_size).all(|i| ranks.get(0) + i == ranks.get(i));
-        let is_flush = (1..hand_size).all(|i| cards.get(0).suit == cards.get(i).suit);
+        let is_straight = ranks.len() >= hand_size && (1..hand_size).all(|i| ranks.get(0) + i == ranks.get(i));
+        let is_flush = cards.len() >= hand_size && (1..hand_size).all(|i| cards.get(0).suit == cards.get(i).suit);
 
         let mut by_rank: [u8; NUM_RANKS+1] = [0; NUM_RANKS+1];
         for rank in ranks.iter() {
@@ -380,7 +380,7 @@ impl<P: Clone + Eq + Hash> Subpot<P> {
 
 pub fn best_hand_use_from_hand(use_from_hand: usize, hand: CardTuple, community: CardTuple, hand_size: usize, rules: &SpecialRules) -> HandStrength {
     combinations(hand.iter(), use_from_hand).into_iter().map(|combo| {
-        best_hand(combo.into_iter().collect(), community, 5, rules)
+        best_hand(combo.into_iter().collect(), community, hand_size, rules)
     }).max().unwrap()
 }
 
