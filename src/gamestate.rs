@@ -33,7 +33,7 @@ pub enum RoundState {
     Ante,
     Bet {
         player: PlayerRole,
-        last_bet: Option<(PlayerRole, Chips)>,
+        last_bet: Option<(Option<PlayerRole>, Chips)>,
         all_bets: HashMap<PlayerRole, Chips>
     },
     DrawToHand {
@@ -84,7 +84,7 @@ type PlayersState = HashMap<PlayerRole, PlayerState>;
 
 pub struct BetState {
     pub player: PlayerRole,
-    pub last_bet: Option<(PlayerRole, Chips)>,
+    pub last_bet: Option<(Option<PlayerRole>, Chips)>,
     pub all_bets: HashMap<PlayerRole, Chips>,
 }
 
@@ -463,7 +463,7 @@ fn collect_ante_from_players(rule: &AnteRule, players: &mut HashMap<PlayerRole, 
             }
             last.map(|(last_blind_role, amount)| BetState {
                 player: blind_role,
-                last_bet: Some((last_blind_role, amount)),
+                last_bet: Some((None, amount)),
                 all_bets
             })
         }
@@ -656,7 +656,7 @@ pub async fn play_poker<'a>(variant: PokerVariant,
                     }
                     Bet{player: bet_role, last_bet, mut all_bets} => {
                         let (last_bet_amount, min_bet) = if let Some((last_bet_player, last_bet_amount)) = last_bet {
-                            if last_bet_player == bet_role {
+                            if last_bet_player == Some(bet_role) {
                                 collect_bets(&mut state.players, &all_bets);
                                 state.cur_round = None;
                                 continue;
@@ -688,8 +688,8 @@ pub async fn play_poker<'a>(variant: PokerVariant,
                             match f.await {
                                 BetResp::Bet(num_chips) => {
                                     //assert!(num_chips == 0 || num_chips == last_bet_amount || num_chips >= min_bet);
-                                    if last_bet.is_none() || num_chips > last_bet_amount {
-                                        this_bet = Some((bet_role, num_chips));
+                                    if last_bet.is_none() || last_bet.unwrap().0.is_none() || num_chips > last_bet_amount {
+                                        this_bet = Some((Some(bet_role), num_chips));
                                     }
                                     viewdiffs.push(PokerGlobalViewDiff::Common(PokerViewDiff::from_player_bet_min_bet(bet_role, num_chips, *all_bets.get(&bet_role).unwrap_or(&0), last_bet_amount)));
                                     *all_bets.entry(bet_role).or_insert(0) = num_chips;
