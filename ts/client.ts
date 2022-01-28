@@ -421,10 +421,6 @@ function join() {
     }
 }
 
-function reset_input() {
-    draw_action(null, null);
-}
-
 function dealers_choice(idx: number) {
     const player_input = document.getElementById("name_input");
     const player_id = (<HTMLInputElement>player_input).value.trim();
@@ -463,7 +459,6 @@ function dealers_choice(idx: number) {
         body: JSON.stringify(resp)
     }).then(resp => {
         if (resp.ok) {
-            reset_input();
         } else {
             revert();
         }
@@ -492,7 +487,6 @@ function replace() {
             body: JSON.stringify(replace_resp)
         }).then(resp => {
             if (resp.ok) {
-                reset_input();
             } else {
                 revert();
             }
