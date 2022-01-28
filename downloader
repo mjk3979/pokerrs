@@ -11,5 +11,6 @@ wget 'https://upload.wikimedia.org/wikipedia/commons/thumb/f/f3/Minicard_back.sv
 for rank in {2..10} {A,J,K,Q}; do
     for suit in {C,H,S,D}; do
         wget "$(wget -O - "https://commons.wikimedia.org/wiki/File:Minicard ${rank}${suit}.svg" | grep -oP 'https://[^"]*155px[^"]*\.png')"
+        sleep 5
     done
 done
