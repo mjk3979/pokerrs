@@ -36,7 +36,8 @@ impl CardViewState {
 pub struct PlayerViewState {
     pub chips: Chips,
     pub total_bet: Chips,
-    pub hand: Vec<CardViewState>
+    pub hand: Vec<CardViewState>,
+    pub folded: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -328,7 +329,8 @@ impl PokerViewState {
                 chips: player_state.chips,
                 total_bet: player_state.total_bet,
                 hand: player_state.hand.iter().map(|card_state|
-                    CardViewState::from_card_state_and_same_player(card_state, role == player)).collect()
+                    CardViewState::from_card_state_and_same_player(card_state, role == player)).collect(),
+                folded: player_state.folded,
             })
         }).collect();
         let community_cards = state.community_cards.iter().map(|c| Visible(CardState{

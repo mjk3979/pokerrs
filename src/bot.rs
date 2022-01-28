@@ -175,7 +175,7 @@ pub fn win_ratio(state: &PokerViewState) -> f64 {
     let mut players: Vec<(CardTuple, usize)> = Vec::new();
     let mut max_player_hidden = 0;
     for (role, player) in &state.players {
-        if *role == state.role {
+        if *role == state.role || player.folded {
             continue;
         }
         let mut visible: CardTuple = CardTuple::new();
@@ -252,11 +252,13 @@ mod test {
                 chips: 100,
                 total_bet: 1,
                 hand: make_cards(&vec![(2, 0), (3, 0), (0, NUM_RANKS-1), (1, NUM_RANKS-1)]),
+                folded: false,
             }),
             (1, PlayerViewState {
                 chips: 100,
                 total_bet: 1,
                 hand: std::iter::repeat(CardViewState::Invisible).take(4).collect(),
+                folded: false,
             }),
         ].into_iter().collect();
 
@@ -282,11 +284,13 @@ mod test {
                 chips: 100,
                 total_bet: 1,
                 hand: make_cards(&vec![(2, 0), (3, 0), (0, NUM_RANKS-1), (1, NUM_RANKS-1)]),
+                folded: false,
             }),
             (1, PlayerViewState {
                 chips: 100,
                 total_bet: 1,
                 hand: std::iter::repeat(CardViewState::Invisible).take(4).collect(),
+                folded: false,
             }),
         ].into_iter().collect();
 

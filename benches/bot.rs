@@ -22,11 +22,13 @@ fn test_win_ratio_perf_small() {
             chips: 100,
             total_bet: 1,
             hand: make_cards(&vec![(2, 0), (3, 0), (0, NUM_RANKS-1), (1, NUM_RANKS-1)]),
+            folded: false,
         }),
         (1, PlayerViewState {
             chips: 100,
             total_bet: 1,
             hand: std::iter::repeat(CardViewState::Invisible).take(4).collect(),
+            folded: false,
         }),
     ].into_iter().collect();
 
@@ -52,41 +54,49 @@ fn test_win_ratio_perf() {
             chips: 100,
             total_bet: 1,
             hand: make_cards(&vec![(2, 0), (3, 0), (0, NUM_RANKS-1), (1, NUM_RANKS-1)]),
+            folded: false,
         }),
         (1, PlayerViewState {
             chips: 100,
             total_bet: 1,
             hand: std::iter::repeat(CardViewState::Invisible).take(4).collect(),
+            folded: false,
         }),
         (2, PlayerViewState {
             chips: 100,
             total_bet: 1,
             hand: std::iter::repeat(CardViewState::Invisible).take(4).collect(),
+            folded: false,
         }),
         (3, PlayerViewState {
             chips: 100,
             total_bet: 1,
             hand: std::iter::repeat(CardViewState::Invisible).take(4).collect(),
+            folded: false,
         }),
         (4, PlayerViewState {
             chips: 100,
             total_bet: 1,
             hand: std::iter::repeat(CardViewState::Invisible).take(4).collect(),
+            folded: false,
         }),
         (5, PlayerViewState {
             chips: 100,
             total_bet: 1,
             hand: std::iter::repeat(CardViewState::Invisible).take(4).collect(),
+            folded: false,
         }),
         (6, PlayerViewState {
             chips: 100,
             total_bet: 1,
             hand: std::iter::repeat(CardViewState::Invisible).take(4).collect(),
+            folded: false,
         }),
         (7, PlayerViewState {
             chips: 100,
             total_bet: 1,
             hand: std::iter::repeat(CardViewState::Invisible).take(4).collect(),
+            folded: false,
         }),
     ].into_iter().collect();
 
