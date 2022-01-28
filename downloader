@@ -3,6 +3,9 @@
 set -x
 set -e
 
+mkdir -p ts/static/card_images
+cd ts/static/card_images
+
 wget 'https://upload.wikimedia.org/wikipedia/commons/thumb/f/f3/Minicard_back.svg/155px-Minicard_back.svg.png'
 
 for rank in {2..10} {A,J,K,Q}; do
