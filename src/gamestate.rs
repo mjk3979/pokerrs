@@ -379,6 +379,7 @@ impl<P: Clone + Eq + Hash> Subpot<P> {
 }
 
 pub fn best_hand_use_from_hand(use_from_hand: usize, hand: CardTuple, community: CardTuple, hand_size: usize, rules: &SpecialRules) -> HandStrength {
+    let use_from_hand = std::cmp::min(hand.len(), use_from_hand);
     combinations(hand.iter(), use_from_hand).into_iter().map(|combo| {
         best_hand(combo.into_iter().collect(), community, hand_size, rules)
     }).max().unwrap()
