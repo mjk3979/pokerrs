@@ -281,10 +281,10 @@ impl Table {
             let round = state.old_logs.len();
             (just_roles, players, round)
         };
-        let mut deck = Box::new(standard_deck());
+        let mut deck = Box::new(standard_deck().clone());
         {
             let mut rng = rand::thread_rng();
-            deck.shuffle(&mut rng);
+            deck.secure_shuffle(&mut rng);
         }
         let mut rules = self.rules.clone();
         println!("Getting variant");

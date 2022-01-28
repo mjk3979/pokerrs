@@ -1,5 +1,8 @@
 #![allow(unused_imports)]
 
+#[macro_use]
+extern crate lazy_static;
+
 pub mod frozen;
 pub mod comb;
 pub mod fold_channel;

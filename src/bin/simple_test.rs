@@ -38,7 +38,7 @@ async fn main() -> Result<(), PokerRoundError> {
         min_bet: 1
     };
     let variant = seven_card_stud();
-    let mut deck = Box::new(standard_deck());
+    let mut deck = Box::new(standard_deck().clone());
     let mut rng = rand::thread_rng();
     deck.shuffle(&mut rng);
     //let (tx, rx) = fold_channel::channel(1, (), |_, _1| {});

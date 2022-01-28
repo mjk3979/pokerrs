@@ -20,6 +20,7 @@ hyper-rustls = "0.23.0"
 rustls = "0.20.2"
 rustls-pemfile = "0.2.1"
 futures-util = "0.3.19"
+lazy_static = "1.4.0"
 
 [dev-dependencies]
 criterion = "0.3"

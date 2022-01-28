@@ -149,7 +149,7 @@ pub fn win_ratio(state: &PokerViewState) -> f64 {
     let mut won: u64 = 0;
     let mut total: u64 = 0;
 
-    let mut cards_left: CardSet = standard_deck().raw.into_iter().collect();
+    let mut cards_left: CardSet = standard_deck().raw.iter().copied().collect();
     let mut community_hidden = 0;
     let mut community_visible: CardTuple = CardTuple::new();
     for cv in &state.community_cards {

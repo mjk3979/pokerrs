@@ -41,6 +41,13 @@ pub struct CardSetIter {
     idx: usize,
 }
 
+#[derive(Copy, Clone)]
+pub struct AcesCombos {
+    non_aces: CardTuple,
+    ace_suits: u8,
+    idx: u8,
+}
+
 impl RankTuple {
     pub fn new() -> RankTuple {
         RankTuple {
@@ -329,6 +336,56 @@ impl std::ops::Add for CardTuple {
         }
         self
     }
+}
+
+impl AcesCombos {
+    pub fn new(cards: CardTuple) -> AcesCombos {
+        let mut non_aces = CardTuple::new();
+        let mut ace_suits = 0;
+        for card in cards.iter() {
+            if card.rank == 0 {
+                let Suit(suit) = card.suit;
+                ace_suits |= 1 << suit as u8;
+            } else {
+                non_aces.push(card);
+            }
+        }
+        AcesCombos {
+            non_aces,
+            ace_suits,
+            idx: 0
+        }
+    }
+}
+
+impl Iterator for AcesCombos {
+    type Item = CardTuple;
+    fn next(&mut self) -> Option<CardTuple> {
+        while self.idx < 1 << 4 {
+            let to_flip = self.idx & self.ace_suits;
+            if to_flip != self.idx {
+                self.idx += 1;
+                continue;
+            }
+            self.idx += 1;
+            let mut retval = self.non_aces;
+            for suit in 0..4 {
+                if (self.ace_suits & (1<<suit)) != 0 {
+                    if (to_flip & (1<<suit)) != 0 {
+                        retval.push(Card{rank:NUM_RANKS, suit:Suit(suit as usize)});
+                    } else {
+                        retval.push(Card{rank:0, suit:Suit(suit as usize)});
+                    }
+                }
+            }
+            return Some(retval);
+        }
+        return None;
+    }
+}
+
+pub fn aces_combos(cards: CardTuple) -> AcesCombos {
+    AcesCombos::new(cards)
 }
 
 mod test {

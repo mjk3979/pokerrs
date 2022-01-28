@@ -108,6 +108,10 @@ pub trait Deck {
 
 pub trait Shuffleable {
     fn shuffle<R: Rng>(&mut self, rng: &mut R);
+
+    fn secure_shuffle<R: Rng+CryptoRng>(&mut self, rng: &mut R) {
+        self.shuffle(rng);
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -134,19 +138,18 @@ impl Shuffleable for VecDeck {
 pub const NUM_RANKS: usize = 13;
 pub const NUM_SUITS: usize = 4;
 
-pub fn standard_deck() -> VecDeck {
-    let mut raw = Vec::new();
-    for suit in 0..NUM_SUITS {
-        for rank in 0..NUM_RANKS {
-            raw.push(Card {
-                suit: Suit(suit),
-                rank
-            });
-        }
-    }
-    VecDeck {
-        raw
-    }
+lazy_static! {
+    static ref STANDARD_DECK: VecDeck = VecDeck {
+        raw: (0..NUM_SUITS).flat_map(|suit| {
+            (0..NUM_RANKS).map(move |rank| {
+                Card{rank, suit: Suit(suit)}
+            })
+        }).collect()
+    };
+}
+
+pub fn standard_deck() -> &'static VecDeck {
+    &STANDARD_DECK
 }
 
 #[test]

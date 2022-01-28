@@ -212,33 +212,6 @@ fn explode_aces(cards: CardTuple) -> CardTuple {
     retval
 }
 
-pub fn aces_combos(cards: CardTuple) -> Vec<CardTuple> {
-    let mut non_aces = CardTuple::new();
-    let mut ace_suits = Vec::new();
-    for card in cards.iter() {
-        if card.rank == 0 {
-            ace_suits.push(card.suit);
-        } else {
-            non_aces.push(card);
-        }
-    }
-    let mut retval = Vec::new();
-    let mut stack = vec![(non_aces, ace_suits.iter())];
-    while let Some((cur, mut ace_suits)) = stack.pop() {
-        if let Some(suit) = ace_suits.next().copied() {
-            let mut next = cur;
-            next.push(Card{rank: 0, suit});
-            stack.push((next, ace_suits.clone()));
-            let mut next = cur;
-            next.push(Card{rank: NUM_RANKS, suit});
-            stack.push((next, ace_suits.clone()));
-        } else {
-            retval.push(cur);
-        }
-    }
-    retval
-}
-
 pub fn best_hand(hand: CardTuple, community: CardTuple, hand_size: usize, rules: &SpecialRules) -> HandStrength {
     for rule in rules {
         if rule.wtype == SpecialCardType::WinsItAll {
@@ -271,10 +244,10 @@ pub fn best_hand(hand: CardTuple, community: CardTuple, hand_size: usize, rules:
     //let mut wild_combos = vec![all_cards.clone()];
     let mut wild_combos = Vec::new();
 
-    for wilds in combinations_with_replacement(standard_deck().raw, num_wild) {
+    for wilds in combinations_with_replacement(standard_deck().raw.iter(), num_wild) {
         let mut wild_hand = unwild.clone();
         for wild in wilds {
-            wild_hand.push(wild)
+            wild_hand.push(*wild)
         }
         wild_combos.push(wild_hand);
     }
@@ -994,7 +967,7 @@ mod test {
 
     fn make_test_calc_winners_state(players: HashMap<PlayerRole, PlayerState>) -> HandState {
         HandState {
-            deck: Mutex::new(Box::new(standard_deck())),
+            deck: Mutex::new(Box::new(standard_deck().clone())),
             rounds: Vec::new(),
             cur_round: None,
             players,
