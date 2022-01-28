@@ -172,7 +172,7 @@ pub fn win_ratio(state: &PokerViewState) -> f64 {
         }
     }
 
-    let mut players: Vec<(CardTuple, usize)> = Vec::new();
+    let mut players: Vec<(CardTuple, usize, u64)> = Vec::new();
     let mut max_player_hidden = 0;
     for (role, player) in &state.players {
         if *role == state.role || player.folded {
@@ -188,7 +188,11 @@ pub fn win_ratio(state: &PokerViewState) -> f64 {
                 hidden += 1;
             }
         }
-        players.push((visible, hidden));
+        if let Some((_, _, roles)) = players.iter_mut().find(|(v, h, _)| *v == visible && *h == hidden) {
+            *roles += 1;
+        } else {
+            players.push((visible, hidden, 1u64));
+        }
         max_player_hidden = std::cmp::max(hidden, max_player_hidden);
     }
 
@@ -214,15 +218,15 @@ pub fn win_ratio(state: &PokerViewState) -> f64 {
 
             let my_best = best_hand_use_from_hand(state.variant.use_from_hand, my_hand, community, 5, &state.rules);
             for player_combo in player_combos {
-                for (visible, hidden) in &players {
-                    total += 1;
+                for (visible, hidden, roles) in &players {
+                    total += *roles;
                     let mut player_hand = *visible;
                     for card in &player_combo[..*hidden] {
                         player_hand.push(*card);
                     }
                     let player_best = best_hand_use_from_hand(state.variant.use_from_hand, player_hand, community, 5, &state.rules);
                     if my_best > player_best {
-                        won += 1;
+                        won += *roles;
                     }
                 }
             }
