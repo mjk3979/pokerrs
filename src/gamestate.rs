@@ -118,6 +118,7 @@ impl HandStrength {
         }
         let mut by_amount: [RankTuple; NUM_SUITS] = [RankTuple::new(); NUM_SUITS];
         for (rank, &amount) in by_rank.iter().enumerate() {
+            let amount = std::cmp::min(amount, NUM_SUITS as u8);
             if amount > 0 {
                 by_amount[(amount-1) as usize].push(rank);
             }
