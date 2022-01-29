@@ -8,6 +8,7 @@ pub struct StaticConfig {
     pub tls: bool,
     pub cert_path: String,
     pub key_path: String,
+    pub ms_between_rounds: u64,
 }
 
 pub fn read_static_config() -> StaticConfig {

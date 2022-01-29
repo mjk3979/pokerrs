@@ -1,4 +1,5 @@
 use crate::card::*;
+use crate::static_config::*;
 use crate::special_card::*;
 use crate::game::*;
 use crate::gamestate::*;
@@ -96,6 +97,7 @@ pub struct Table {
     running_tx: watch::Sender<bool>,
     running_rx: watch::Receiver<bool>,
     config: TableConfig,
+    static_config: StaticConfig,
     state: Mutex<TableState>,
     spectator_tx: fold_channel::Sender<Vec<PokerGlobalViewDiff<PlayerId>>, Vec<PokerGlobalViewDiff<PlayerId>>>,
     pub spectator_rx: fold_channel::Receiver<Vec<PokerGlobalViewDiff<PlayerId>>>,
@@ -228,6 +230,7 @@ impl Table {
             spectator_rx,
             table_view_tx,
             table_view_rx,
+            static_config: read_static_config(),
         }
     }
 
@@ -320,7 +323,7 @@ impl Table {
             round,
             ).await {
             Ok(winners) => {
-                tokio::time::sleep(Duration::from_millis(2_000)).await;
+                tokio::time::sleep(Duration::from_millis(self.static_config.ms_between_rounds)).await;
                 let mut state = self.state.lock().unwrap();
                 {
                     let old_log = (&self.spectator_rx.borrow()[..]);
