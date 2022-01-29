@@ -61,6 +61,7 @@ pub enum PokerVariantState {
 }
 
 struct TableState {
+    rules: TableRules,
     players: HashMap<PlayerId, LivePlayer>,
     seats: BTreeMap<Seat, PlayerId>,
     last_dealer: Option<Seat>,
@@ -95,7 +96,6 @@ pub struct Table {
     running_tx: watch::Sender<bool>,
     running_rx: watch::Receiver<bool>,
     config: TableConfig,
-    rules: TableRules,
     state: Mutex<TableState>,
     spectator_tx: fold_channel::Sender<Vec<PokerGlobalViewDiff<PlayerId>>, Vec<PokerGlobalViewDiff<PlayerId>>>,
     pub spectator_rx: fold_channel::Receiver<Vec<PokerGlobalViewDiff<PlayerId>>>,
@@ -202,6 +202,7 @@ impl Table {
     pub fn new(config: TableConfig, rules: TableRules, ante_rule: Box<AnteRuleFn>) -> Table {
         let start_time = std::time::Instant::now();
         let state = TableState {
+            rules,
             players: HashMap::new(),
             seats: BTreeMap::new(),
             last_dealer: None,
@@ -222,7 +223,6 @@ impl Table {
             running_tx,
             running_rx,
             config,
-            rules,
             state: Mutex::new(state),
             spectator_tx,
             spectator_rx,
@@ -286,10 +286,9 @@ impl Table {
             let mut rng = rand::thread_rng();
             deck.secure_shuffle(&mut rng);
         }
-        let mut rules = self.rules.clone();
         println!("Getting variant");
         let (variant, variant_desc, special_cards) = self.get_next_variant().await;
-        {
+        let rules = {
             println!("Got variant");
             let mut state = self.state.lock().unwrap();
             println!("Locked state");
@@ -298,17 +297,19 @@ impl Table {
             self.table_view_tx.send(self.viewstate(&state));
             println!("Sent viewstate");
 
-            rules.ante = (state.ante_rule)(round, state.server_uptime());
+            state.rules.ante = (state.ante_rule)(round, state.server_uptime());
             println!("Got ante rule");
-            let new_min_bet = match &rules.ante {
+            let new_min_bet = match &state.rules.ante {
                 AnteRule::Ante(ante) => *ante,
                 AnteRule::Blinds(blinds) => blinds.iter().map(|b| b.amount).max().unwrap(),
             };
-            if new_min_bet != rules.min_bet {
-                rules.min_bet = new_min_bet;
-                state.add_table_event(TableEvent::AnteChange{new_table_rules: rules.clone()});
+            if new_min_bet != state.rules.min_bet {
+                state.rules.min_bet = new_min_bet;
+                let send_rules = state.rules.clone();
+                state.add_table_event(TableEvent::AnteChange{new_table_rules: send_rules});
             }
-        }
+            state.rules.clone()
+        };
         println!("Playing poker...");
         match play_poker(variant,
             Mutex::new(deck),
