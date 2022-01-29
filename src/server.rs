@@ -250,8 +250,9 @@ impl GameServer {
             }
         });
 
-        let port = 8080;
-        let addr = format!("0.0.0.0:{}", port).parse::<SocketAddr>().unwrap();
+        let address = static_config.serve_address;
+        let port = static_config.serve_port;
+        let addr = format!("{}:{}", address, port).parse::<SocketAddr>().unwrap();
         if static_config.tls {
             let tls_cfg = { 
                 // Load public certificate.
