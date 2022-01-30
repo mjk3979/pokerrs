@@ -251,8 +251,8 @@ function draw_action(action: ServerActionRequest | null, viewstate: PokerViewSta
         const bet_this_round = viewstate.bet_this_round[viewstate.role] ?? 0;
         const bettable = player.chips - player.total_bet - bet_this_round;
         const call_amount = action.data.call_amount;
-        if (call_amount > 0) {
-            call_button.value = `Call ${call_amount}`;
+        if (call_amount - bet_this_round > 0) {
+            call_button.value = `Call ${call_amount - bet_this_round}`;
         } else {
             call_button.value = "Check";
         }

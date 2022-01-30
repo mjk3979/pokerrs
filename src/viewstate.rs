@@ -222,25 +222,25 @@ impl<P: Clone + Eq + Hash> PokerViewDiff<P> {
 
     pub fn from_player_bet_min_bet(better: P, chips: Chips, bet_this_round: Chips, last_bet: Chips) -> PokerViewDiff<P> {
         use PokerViewDiff::*;
-        let total = chips + bet_this_round;
-        if last_bet == 0 && chips == 0 {
+        let call_amount = chips - bet_this_round;
+        if (last_bet == 0 && chips == 0) || (call_amount == 0) {
             Bet {
                 bet_kind: BetDiffKind::Check,
                 player: better,
-                chips
+                chips: call_amount
             }
         } else if chips <= last_bet {
             Bet {
                 bet_kind: BetDiffKind::Call,
                 player: better,
-                chips
+                chips: call_amount
             }
         } else {
-            let raise = total - last_bet;
+            let raise = chips - last_bet;
             Bet {
                 bet_kind: BetDiffKind::Raise {
                     diff_from_last_raise: raise,
-                    total
+                    total: chips
                 },
                 player: better,
                 chips
