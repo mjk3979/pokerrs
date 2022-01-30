@@ -5,6 +5,8 @@ use crate::game::*;
 use crate::gamestate::*;
 use crate::viewstate::*;
 
+use rand::prelude::*;
+
 use tokio::sync::watch;
 
 use async_trait::async_trait;
@@ -15,7 +17,7 @@ use std::sync::Arc;
 pub trait Bot: Send + Sync {
     fn bet(&self, state: &PokerViewState, call_amount: Chips, min_bet: Chips) -> BetResp;
     fn replace(&self, state: &PokerViewState, max_can_replace: usize) -> ReplaceResp {
-        Vec::new()
+        best_replace(state, max_can_replace)
     }
 }
 
@@ -50,12 +52,14 @@ impl PlayerInputSource for BotInputSource {
     }
 
     async fn replace(&self, max_can_replace: usize) -> ReplaceResp {
-        // Replace nothing
-        Vec::new()
+        let mstate = self.viewstate_rx.borrow();
+        let state = mstate.as_ref().unwrap();
+        self.bot.replace(state, max_can_replace)
     }
 
     async fn dealers_choice(&self, variants: Vec<PokerVariantDesc>) -> DealersChoiceResp {
-        let variant_idx = 0;
+        let mut rng = rand::thread_rng();
+        let variant_idx = rng.gen_range(0..variants.len());
         DealersChoiceResp {
             variant_idx,
             special_cards: Vec::new(),
@@ -67,8 +71,33 @@ impl PlayerInputSource for BotInputSource {
     }
 }
 
+pub fn cards_left(state: &PokerViewState) -> CardSet {
+    let mut cards_left: CardSet = standard_deck().raw.iter().copied().collect();
+    for cv in &state.community_cards {
+        if let CardViewState::Visible(cs) = cv {
+            cards_left.remove(cs.card);
+        }
+    }
+
+    for (_, player) in &state.players {
+        for cv in &player.hand {
+            if let CardViewState::Visible(cs) = cv {
+                cards_left.remove(cs.card);
+            }
+        }
+    }
+    cards_left
+}
+
 pub fn my_hand(state: &PokerViewState) -> Vec<CardViewState> {
     state.players.get(&state.role).unwrap().hand.iter().cloned().collect()
+}
+
+pub fn visible_cards(cards: &[CardViewState]) -> CardTuple {
+    cards.iter().filter_map(|cv| match cv {
+        CardViewState::Visible(cs) => Some(cs.card),
+        CardViewState::Invisible => None,
+    }).collect()
 }
 
 pub fn check_or_call_any(state: &PokerViewState, call_amount: Chips) -> BetResp {
@@ -146,10 +175,13 @@ pub fn bet_risk_factor(state: &PokerViewState, call_amount: Chips, min_bet: Chip
 }
 
 pub fn win_ratio(state: &PokerViewState) -> f64 {
+    win_ratio_cards_left(state, standard_deck().raw.iter().copied().collect())
+}
+pub fn win_ratio_cards_left(state: &PokerViewState, cards_left: CardSet) -> f64 {
     let mut won: u64 = 0;
     let mut total: u64 = 0;
 
-    let mut cards_left: CardSet = standard_deck().raw.iter().copied().collect();
+    let mut cards_left: CardSet = cards_left;
     let mut community_hidden = 0;
     let mut community_visible: CardTuple = CardTuple::new();
     for cv in &state.community_cards {
@@ -234,6 +266,48 @@ pub fn win_ratio(state: &PokerViewState) -> f64 {
     }
 
     (won as f64) / (total as f64)
+}
+
+pub fn best_replace(state: &PokerViewState, max_can_replace: usize) -> ReplaceResp {
+    let player_hand = visible_cards(&my_hand(state));
+    let community = visible_cards(&state.community_cards);
+    let start_str = best_hand_use_from_hand(state.variant.use_from_hand, player_hand, community, 5, &state.rules);
+    let cards_left = cards_left(state);
+    let mut best_picked = Vec::new();
+    let mut best = 0f64;
+    for num_replace in 1..max_can_replace+1 {
+        for picked in combinations(0..player_hand.len(), num_replace) {
+            let mut new_hand = CardTuple::new();
+            for idx in 0..player_hand.len() {
+                if picked.contains(&idx) {
+                } else {
+                    let card = player_hand.get(idx);
+                    new_hand.push(card);
+                }
+            }
+            let mut good = 0i64;
+            let mut total = 0i64;
+            for combo in combinations(cards_left.iter(), num_replace) {
+                total += 1;
+                let mut new_hand = new_hand;
+                for card in combo {
+                    new_hand.push(card);
+                }
+                let st = best_hand_use_from_hand(state.variant.use_from_hand, new_hand, community, 5, &state.rules);
+                if st > start_str {
+                    good += 1;
+                } else if st < start_str {
+                    good -= 1;
+                }
+            }
+            let r = (good as f64) / (total as f64);
+            if r > best {
+                best = r;
+                best_picked = picked;
+            }
+        }
+    }
+    best_picked
 }
 
 mod test {
@@ -346,5 +420,38 @@ mod test {
         let r = win_ratio(&vs);
         assert!(r >= 0.0);
         assert!(r <= 1.0);
+    }
+
+    #[test]
+    fn test_replace() {
+        let mut players = vec![(0, PlayerViewState {
+                chips: 100,
+                total_bet: 1,
+                hand: make_cards(&vec![(2, 0), (3, 0), (0, NUM_RANKS-1), (1, 1), (2, 2)]),
+                folded: false,
+            }),
+        ];
+        let num_opponents = 1;
+        for idx in 0..num_opponents {
+            players.push((idx+1, PlayerViewState {
+                chips: 100,
+                total_bet: 1,
+                hand: std::iter::repeat(CardViewState::Invisible).take(5).collect(),
+                folded: false,
+            }));
+        }
+        let players = players.into_iter().collect();
+        let vs = PokerViewState {
+            role: 0,
+            players,
+            community_cards: Vec::new(),
+            bet_this_round: HashMap::new(),
+            rules: Vec::new(),
+            variant: PokerVariantViewState {
+                use_from_hand: 5
+            },
+        };
+        let resp = best_replace(&vs, 4);
+        assert!(resp == vec![3,4], "{:?}", resp);
     }
 }

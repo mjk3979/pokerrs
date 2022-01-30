@@ -114,11 +114,44 @@ fn test_win_ratio_perf() {
     let ratio = win_ratio(&vs);
 }
 
+fn test_replace(num_opponents: usize) {
+    let mut players = vec![(0, PlayerViewState {
+            chips: 100,
+            total_bet: 1,
+            hand: make_cards(&vec![(2, 0), (3, 0), (0, NUM_RANKS-1), (1, 1), (2, 2)]),
+            folded: false,
+        }),
+    ];
+    for idx in 0..num_opponents {
+        players.push((idx+1, PlayerViewState {
+            chips: 100,
+            total_bet: 1,
+            hand: std::iter::repeat(CardViewState::Invisible).take(5).collect(),
+            folded: false,
+        }));
+    }
+    let players = players.into_iter().collect();
+    let vs = PokerViewState {
+        role: 0,
+        players,
+        community_cards: Vec::new(),
+        bet_this_round: HashMap::new(),
+        rules: Vec::new(),
+        variant: PokerVariantViewState {
+            use_from_hand: 5
+        },
+    };
+    let resp = best_replace(&vs, 4);
+}
+
 fn criterion_benchmark(c: &mut Criterion) {
-    let mut group = c.benchmark_group("win_ratio");
+    let mut group = c.benchmark_group("bot");
     group.sample_size(10);
     group.bench_function("win_ratio 2x4", |b| b.iter(|| test_win_ratio_perf_small()));
     group.bench_function("win_ratio 8x4", |b| b.iter(|| test_win_ratio_perf()));
+    group.bench_function("replace 2x5", |b| b.iter(|| test_replace(1)));
+    group.bench_function("replace 4x5", |b| b.iter(|| test_replace(3)));
+    group.bench_function("replace 6x5", |b| b.iter(|| test_replace(5)));
 }
 
 criterion_group!(benches, criterion_benchmark);
