@@ -325,6 +325,7 @@ mod test {
     }
 
     #[test]
+    #[ignore]
     fn test_win_ratio() {
         let players = vec![(0, PlayerViewState {
                 chips: 100,
@@ -357,6 +358,7 @@ mod test {
     }
 
     #[test]
+    #[ignore]
     fn test_win_ratio_empty_community() {
         let players = vec![(0, PlayerViewState {
                 chips: 100,
@@ -389,6 +391,7 @@ mod test {
     }
 
     #[test]
+    #[ignore]
     fn test_win_ratio_start_seven_stud() {
         let mut other_cards = std::iter::repeat(CardViewState::Invisible).take(2).collect::<Vec<_>>();
         other_cards.extend_from_slice(&make_cards(&vec![(1, 5)]));
@@ -423,6 +426,7 @@ mod test {
     }
 
     #[test]
+    #[ignore]
     fn test_replace() {
         let mut players = vec![(0, PlayerViewState {
                 chips: 100,
