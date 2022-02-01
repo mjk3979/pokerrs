@@ -17,6 +17,7 @@ pub mod special_card;
 pub mod game;
 pub mod gamestate;
 //mod state_iter;
+pub mod auth;
 pub mod table;
 pub mod viewstate;
 pub mod cmdline;
