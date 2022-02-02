@@ -1,5 +1,7 @@
+use crate::auth::*;
 use crate::card::*;
 use crate::game::*;
+use crate::id_counter::*;
 use crate::table::*;
 use crate::template::*;
 use crate::viewstate::*;
@@ -96,6 +98,8 @@ pub struct ServerPlayer {
 #[derive(Clone, Serialize, Deserialize)]
 #[derive(TS)]
 pub struct ServerUpdate {
+    pub player_id: Option<PlayerId>,
+    pub new_auth_token: Option<Vec<u8>>,
     pub player: Option<ServerPlayer>,
     pub log: Vec<PokerLogUpdate>,
     pub slog: Option<Vec<Vec<String>>>,
@@ -103,9 +107,11 @@ pub struct ServerUpdate {
 }
 
 pub type TableId = usize;
+pub type GameServerId = u64;
 
 pub struct GameServerTable {
     table: Table,
+    player_id_map: Mutex<HashMap<GameServerId, PlayerId>>,
     players: Mutex<HashMap<PlayerId, Arc<GameServerPlayerInputSource>>>,
     log_update_channel_r: fold_channel::Receiver<Vec<PokerGlobalViewDiff<PlayerId>>>,
     bots: Mutex<Vec<Arc<BotInputSource>>>,
@@ -113,6 +119,8 @@ pub struct GameServerTable {
 
 pub struct GameServer {
     tables: Mutex<BTreeMap<TableId, Arc<GameServerTable>>>,
+    id_counter: IdCounter,
+    auth: Mutex<RandomTokenAuthMap<GameServerId>>,
     static_files: StaticFiles,
     //log_update_channel_t: fold_channel::Sender<Vec<PokerGlobalViewDiff>>
 }
@@ -218,10 +226,6 @@ impl PlayerInputSource for GameServerPlayerInputSource {
 }
 
 
-fn player_from_params(params: &HashMap<String, String>) -> Option<PlayerId> {
-    params.get("player").cloned()
-}
-
 fn default_template_variables() -> HashMap<String, String> {
     vec![
         ("ALL_VARIANTS".to_string(), PokerVariants::all().descs.into_iter().map(|desc| {
@@ -237,6 +241,22 @@ async fn shutdown_signal() {
         .expect("failed to install CTRL+C signal handler");
 }
 
+impl GameServerTable {
+    pub fn get_player_id(&self, server_id: GameServerId, default_id: Option<PlayerId>) -> Option<PlayerId> {
+        let mut map = self.player_id_map.lock().unwrap();
+        let entry = map.entry(server_id);
+        if let Some(player_id) = default_id {
+            Some(entry.or_insert(player_id).clone())
+        } else {
+            if let std::collections::hash_map::Entry::Occupied(e) = entry {
+                Some(e.get().clone())
+            } else {
+                None
+            }
+        }
+    }
+}
+
 impl GameServer {
     pub async fn create_and_serve<'a>(table_rules: TableRules) {
         let static_config = read_static_config();
@@ -245,6 +265,8 @@ impl GameServer {
             //let (log_update_channel_t, log_update_channel_r) = watch::channel(());
             GameServer {
                 tables: Mutex::new(BTreeMap::new()),
+                id_counter: IdCounter::new(),
+                auth: Mutex::new(RandomTokenAuthMap::new(512)),
                 static_files,
                 //log_update_channel_t: spectator_tx.clone()
             }
@@ -398,7 +420,8 @@ impl GameServer {
             let players = Mutex::new(HashMap::new());
             let log_update_channel_r = table.spectator_rx.clone();
             let bots = Mutex::new(Vec::new());
-            GameServerTable { table, players, log_update_channel_r, bots }
+            let player_id_map = Mutex::new(HashMap::new());
+            GameServerTable { table, player_id_map, players, log_update_channel_r, bots }
         });
 
         let mut tables = self.tables.lock().unwrap();
@@ -425,6 +448,28 @@ impl GameServer {
         let mut response = Response::new(Body::empty());
         *response.status_mut() = StatusCode::BAD_REQUEST;
         let params = req.uri().query().map(|q| url::form_urlencoded::parse(q.as_bytes()).into_owned().collect()).unwrap_or(HashMap::new());
+        let header_token: Option<Vec<u8>> = req.headers().get("Authorization").map(|v| {
+            //let v = v.to_str().ok()?;
+            const BASIC: &'static str = "Basic ";
+            if v.to_str().ok()?.starts_with(BASIC) {
+                serde_json::from_slice(&v.as_bytes()[BASIC.len()..]).ok()
+            } else {
+                None
+            }
+        }).flatten();
+        let mut new_auth_token = None;
+        let param_id = params.get("player").cloned();
+        let game_server_id = {
+            let mut auth = self.auth.lock().unwrap();
+            if let Some(gid) = header_token.as_ref().map(|t| auth.get(t)).flatten() {
+                *gid
+            } else {
+                let id = self.id_counter.next();
+                let token = auth.insert(id);
+                new_auth_token = Some(token.clone());
+                id
+            }
+        };
         match (req.method(), req.uri().path()) {
             (&Method::POST, "/create_table") => {
                 if let Ok(table_params) = serde_json::from_slice::<ServerTableParameters>(&hyper::body::to_bytes(req.into_body()).await.unwrap()) {
@@ -453,10 +498,12 @@ impl GameServer {
             },
             (&Method::GET, "/game") => {
                 if let Some(table) = self.table_from_params(&params) {
-                    if let Some(player_id) = player_from_params(&params) {
-                        if let Some(input_source) = self.get_player(&table, player_id) {
+                    if let Some(player_id) = table.get_player_id(game_server_id, param_id) {
+                        if let Some(input_source) = self.get_player(&table, player_id.clone()) {
                             let player = input_source.server_player();
                             match serde_json::to_vec(&ServerUpdate {
+                                player_id: Some(player_id),
+                                new_auth_token,
                                 player: Some(player),
                                 log: Vec::new(),
                                 slog: None,
@@ -478,16 +525,18 @@ impl GameServer {
             (&Method::GET, "/gamediff") => {
                 if let Some(table) = self.table_from_params(&params) {
                     if let Some(start_from) = params.get("start_from").map(|p| p.parse::<usize>().ok()).unwrap_or(None) {
-                        if let Some(player_id) = player_from_params(&params) {
+                        if let Some(player_id) = table.get_player_id(game_server_id, param_id) {
                             let known_action_requested = params.get("known_action_requested").map(|t| serde_json::from_str::<Option<ServerActionRequest>>(&t).ok().flatten()).flatten();
                             if let Some(_) = self.get_player(&table, player_id.clone()) {
-                                let (log, player) = self.notify_player(table.clone(), player_id, start_from, known_action_requested).await;
+                                let (log, player) = self.notify_player(table.clone(), player_id.clone(), start_from, known_action_requested).await;
                                 let slog = if Some(true) == params.get("send_string_log").map(|p| p.parse::<i64>().ok().map(|i| i != 0)).flatten() {
                                     Some(log.iter().map(|u| u.log.iter().map(|l| l.to_string()).collect()).collect())
                                 } else {
                                     None
                                 };
                                 let update = ServerUpdate {
+                                    player_id: Some(player_id),
+                                    new_auth_token,
                                     player: Some(player),
                                     log,
                                     slog,
@@ -505,6 +554,8 @@ impl GameServer {
                                 None
                             };
                             let update = ServerUpdate {
+                                player_id: None,
+                                new_auth_token,
                                 player: None,
                                 log,
                                 slog,
@@ -549,7 +600,7 @@ impl GameServer {
             },
             (&Method::POST, "/bet") => {
                 if let Some(table) = self.table_from_params(&params) {
-                    if let Some(player_id) = player_from_params(&params) {
+                    if let Some(player_id) = table.get_player_id(game_server_id, param_id) {
                         if let Some(conn) = self.get_player(&table, player_id) {
                             if let Ok(resp) = serde_json::from_slice::<BetResp>(&hyper::body::to_bytes(req.into_body()).await.unwrap()) {
                                 let input_source = conn;
@@ -576,7 +627,7 @@ impl GameServer {
             },
             (&Method::POST, "/dealers_choice") => {
                 if let Some(table) = self.table_from_params(&params) {
-                    if let Some(player_id) = player_from_params(&params) {
+                    if let Some(player_id) = table.get_player_id(game_server_id, param_id) {
                         if let Some(conn) = self.get_player(&table, player_id) {
                             if let Ok(resp) = serde_json::from_slice::<DealersChoiceResp>(&hyper::body::to_bytes(req.into_body()).await.unwrap()) {
                                 conn.dealers_choice_tx.send(resp);
@@ -593,7 +644,7 @@ impl GameServer {
             },
             (&Method::POST, "/replace") => {
                 if let Some(table) = self.table_from_params(&params) {
-                    if let Some(player_id) = player_from_params(&params) {
+                    if let Some(player_id) = table.get_player_id(game_server_id, param_id) {
                         if let Some(player) = self.get_player(&table, player_id) {
                             if let Ok(resp) = serde_json::from_slice::<ReplaceResp>(&hyper::body::to_bytes(req.into_body()).await.unwrap()) {
                                 if let Some(ServerActionRequest::Replace{max_can_replace}) = player.server_player().action_requested.clone() {

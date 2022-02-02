@@ -16,27 +16,52 @@ import {
     ServerTableParameters,
 } from "./pokerrs.ts";
 
-function api<T>(url: string): Promise<T> {
-  return fetch(url)
-    .then(response => {
-      if (!response.ok) {
-        throw new Error(response.statusText)
-      }
-      return response.json()
-    })
+var auth_token: string | null = null;
 
+function read_auth_token_cookie() {
+    let cook = document.cookie;
+    let a1 = cook.split('; ');
+    let a2 = a1.find(row => row.startsWith('pokerrs_auth_token='))
+    if (a2) {
+        auth_token = a2.split("=")[1] ?? null;
+    }
+}
+
+function set_auth_token_cookie() {
+    if (auth_token) {
+        document.cookie = `pokerrs_auth_token=${auth_token}; SameSite=Strict; Secure`;
+    }
+}
+
+function api<T>(url: string): Promise<T> {
+    let headers = new Headers();
+    if (auth_token) {
+        headers.set("Authorization", `Basic ${auth_token}`);
+    }
+    return fetch(url, {
+            headers: headers
+        })
+        .then(response => {
+          if (!response.ok) {
+            throw new Error(response.statusText)
+          }
+          return response.json()
+        })
 }
 
 function fetch_update(player_id: string, start_from: number, known_action_requested: ServerActionRequest | null) {
     let action_request_param = `&known_action_requested=${encodeURI(JSON.stringify(known_action_requested))}`;
     api<ServerUpdate>(`/gamediff?send_string_log=1&player=${player_id}&table_id=${current_table_id}&start_from=${start_from}${action_request_param}`).then(update => {
-        console.log(update);
+        let player_id = update.player_id!;
         for (let log_update of update.log) {
             start_from += log_update.log.length;
         }
         let action_requested = update.player?.action_requested ?? null;
+        if (update.new_auth_token) {
+            auth_token = JSON.stringify(update.new_auth_token);
+            set_auth_token_cookie();
+        }
         draw(player_id, update);
-        console.log(`fetching ${start_from} ${action_requested?.kind}`);
         fetch_update(player_id, start_from, action_requested);
     }).catch(err => {
         console.log(`error: ${err}`);
@@ -412,8 +437,13 @@ function join() {
         const name_screen = document.getElementById("name_screen");
         name_screen?.classList.add("hidden");
         api<ServerUpdate>(`/game?player=${player_id}&table_id=${current_table_id}`).then(update => {
+            let player_id = update.player_id!;
             draw(player_id, update);
             const action = update.player?.action_requested ?? null;
+            if (update.new_auth_token) {
+                auth_token = JSON.stringify(update.new_auth_token);
+                set_auth_token_cookie();
+            }
             fetch_update(player_id, 0, action);
         }).catch(err => {
             console.log(`err: ${err}`);
@@ -686,6 +716,8 @@ function create_table() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+    read_auth_token_cookie();
+
     const player_input = document.getElementById("name_submit")!;
     const call_button = document.getElementById("call_button")!;
     const fold_button = document.getElementById("fold_button")!;
