@@ -414,6 +414,9 @@ impl GameServer {
 
     fn create_table(&self, params: ServerTableParameters) -> Result<TableId, String> {
         let ServerTableParameters{table_config, ante_rule} = params;
+        if !table_config.variant_selector.is_valid() {
+            return Err("Must select at least one variant".to_string());
+        }
         let gametable = Arc::new({
             let starting_rules = ante_rule.starting_rules();
             let table = Table::new(table_config, starting_rules, ante_rule.rule_fn());

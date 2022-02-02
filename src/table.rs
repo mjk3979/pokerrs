@@ -85,6 +85,15 @@ pub enum PokerVariantSelector {
     DealersChoice(PokerVariants),
 }
 
+impl PokerVariantSelector {
+    pub fn is_valid(&self) -> bool {
+        match self {
+            PokerVariantSelector::Rotation(v) => !v.descs.is_empty(),
+            PokerVariantSelector::DealersChoice(v) => !v.descs.is_empty(),
+        }
+    }
+}
+
 #[derive(Clone, Serialize, Deserialize)]
 #[derive(TS)]
 pub struct TableConfig {
