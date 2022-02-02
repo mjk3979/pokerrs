@@ -522,6 +522,24 @@ impl GameServer {
                                 }
                             };
                         }
+                    } else {
+                        match serde_json::to_vec(&ServerUpdate {
+                            player_id: None,
+                            new_auth_token,
+                            player: None,
+                            log: Vec::new(),
+                            slog: None,
+                            table: table.table.table_view_rx.borrow().clone()
+                        }) {
+                            Ok(v) => {
+                                *response.body_mut() = Body::from(v);
+                                *response.status_mut() = StatusCode::OK;
+                            },
+                            Err(error) => {
+                                *response.body_mut() = Body::from(error.to_string());
+                                *response.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
+                            }
+                        };
                     }
                 }
             },
