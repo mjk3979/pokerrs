@@ -33,11 +33,16 @@ function set_auth_token_cookie() {
     }
 }
 
-function api<T>(url: string): Promise<T> {
+function auth_headers(): Headers {
     let headers = new Headers();
     if (auth_token) {
         headers.set("Authorization", `Basic ${auth_token}`);
     }
+    return headers;
+}
+
+function api<T>(url: string): Promise<T> {
+    let headers = auth_headers();
     return fetch(url, {
             headers: headers
         })
@@ -49,20 +54,27 @@ function api<T>(url: string): Promise<T> {
         })
 }
 
-function fetch_update(player_id: string, start_from: number, known_action_requested: ServerActionRequest | null) {
+function fetch_update(player_id: string | null, start_from: number, known_action_requested: ServerActionRequest | null) {
+    const name_screen = document.getElementById("name_screen")!;
+
     let action_request_param = `&known_action_requested=${encodeURI(JSON.stringify(known_action_requested))}`;
-    api<ServerUpdate>(`/gamediff?send_string_log=1&player=${player_id}&table_id=${current_table_id}&start_from=${start_from}${action_request_param}`).then(update => {
-        let player_id = update.player_id!;
-        for (let log_update of update.log) {
-            start_from += log_update.log.length;
+    let player_id_q = (player_id?.length ?? 0) > 0 ? `player=${player_id}&` : "";
+    api<ServerUpdate>(`/gamediff?send_string_log=1&${player_id_q}table_id=${current_table_id}&start_from=${start_from}${action_request_param}`).then(update => {
+        let player_id = update.player_id;
+        if (player_id) {
+            for (let log_update of update.log) {
+                start_from += log_update.log.length;
+            }
+            let action_requested = update.player?.action_requested ?? null;
+            if (update.new_auth_token) {
+                auth_token = JSON.stringify(update.new_auth_token);
+                set_auth_token_cookie();
+            }
+            draw(player_id, update);
+            fetch_update(player_id, start_from, action_requested);
+        } else {
+            name_screen.classList.remove("hidden");
         }
-        let action_requested = update.player?.action_requested ?? null;
-        if (update.new_auth_token) {
-            auth_token = JSON.stringify(update.new_auth_token);
-            set_auth_token_cookie();
-        }
-        draw(player_id, update);
-        fetch_update(player_id, start_from, action_requested);
     }).catch(err => {
         console.log(`error: ${err}`);
     });
@@ -430,14 +442,17 @@ function draw(player_id: string, update: ServerUpdate) {
 }
 
 function join() {
-    const player_input = document.getElementById("name_input");
-    const player_id = (<HTMLInputElement>player_input).value.trim();
+    const player_input = <HTMLInputElement>document.getElementById("name_input");
+    const player_id = player_input.value.trim();
 
-    if (player_id.length > 0) {
-        const name_screen = document.getElementById("name_screen");
-        name_screen?.classList.add("hidden");
-        api<ServerUpdate>(`/game?player=${player_id}&table_id=${current_table_id}`).then(update => {
-            let player_id = update.player_id!;
+    let player_id_q = player_id.length > 0 ? `player=${player_id}&` : "";
+
+    const name_screen = document.getElementById("name_screen")!;
+    name_screen.classList.add("hidden");
+    api<ServerUpdate>(`/game?${player_id_q}table_id=${current_table_id}`).then(update => {
+        let player_id = update.player_id;
+        if (player_id) {
+            player_input.value = player_id;
             draw(player_id, update);
             const action = update.player?.action_requested ?? null;
             if (update.new_auth_token) {
@@ -445,10 +460,12 @@ function join() {
                 set_auth_token_cookie();
             }
             fetch_update(player_id, 0, action);
-        }).catch(err => {
-            console.log(`err: ${err}`);
-        });
-    }
+        } else {
+            name_screen.classList.remove("hidden");
+        }
+    }).catch(err => {
+        console.log(`err: ${err}`);
+    });
 }
 
 function dealers_choice(idx: number) {
@@ -486,6 +503,7 @@ function dealers_choice(idx: number) {
     };
     fetch(`/dealers_choice?player=${player_id}&table_id=${current_table_id}`, {
         method: "POST",
+        headers: auth_headers(),
         body: JSON.stringify(resp)
     }).then(resp => {
         if (resp.ok) {
@@ -514,6 +532,7 @@ function replace() {
         };
         fetch(`/replace?player=${player_id}&table_id=${current_table_id}`, {
             method: "POST",
+            headers: auth_headers(),
             body: JSON.stringify(replace_resp)
         }).then(resp => {
             if (resp.ok) {
@@ -558,6 +577,7 @@ function bet(action: "bet" | "fold" | "call") {
     bet_input.setAttribute("disabled", "");
     fetch(`/bet?player=${player_id}&table_id=${current_table_id}`, {
         method: "POST",
+        headers: auth_headers(),
         body: JSON.stringify(bet_resp)
     }).then(resp => {
         if (!resp.ok) {
@@ -775,5 +795,6 @@ document.addEventListener('DOMContentLoaded', () => {
     if (table_id) {
         table_settings_modal.classList.add("hidden");
         current_table_id = table_id;
+        join();
     }
 });
