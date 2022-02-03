@@ -230,32 +230,35 @@ pub fn best_hand(hand: CardTuple, community: CardTuple, hand_size: usize, rules:
         all_cards.push(card);
     }
 
-    let mut unwild = CardTuple::new();
-    let mut num_wild = 0;
-'outer: for card in all_cards.iter() {
-        for rule in rules {
-            if SpecialCardType::Wild == rule.wtype && rule.card == card {
-                num_wild += 1;
-                continue 'outer;
+    let comb_size = std::cmp::min(all_cards.len(), hand_size);
+    combinations(all_cards.iter(), comb_size).map(|all_cards| {
+        let mut unwild = CardTuple::new();
+        let mut num_wild = 0;
+    'outer: for &card in all_cards.iter() {
+            for rule in rules {
+                if SpecialCardType::Wild == rule.wtype && rule.card == card {
+                    num_wild += 1;
+                    continue 'outer;
+                }
             }
+            unwild.push(card);
         }
-        unwild.push(card);
-    }
 
-    //let mut wild_combos = vec![all_cards.clone()];
-    let mut wild_combos = Vec::new();
+        //let mut wild_combos = vec![all_cards.clone()];
+        let mut wild_combos = Vec::new();
 
-    for wilds in combinations_with_replacement(standard_deck().raw.iter(), num_wild) {
-        let mut wild_hand = unwild.clone();
-        for wild in wilds {
-            wild_hand.push(*wild)
+        for wilds in combinations_with_replacement(standard_deck().raw.iter(), num_wild) {
+            let mut wild_hand = unwild.clone();
+            for wild in wilds {
+                wild_hand.push(*wild)
+            }
+            wild_combos.push(wild_hand);
         }
-        wild_combos.push(wild_hand);
-    }
-    wild_combos.into_iter().filter_map(|wild_hand| {
-        aces_combos(wild_hand).into_iter().filter_map(|v|{
-            Some(HandStrength::new(v, hand_size))
-        }).max()
+        wild_combos.into_iter().filter_map(|wild_hand| {
+            aces_combos(wild_hand).into_iter().filter_map(|v|{
+                Some(HandStrength::new(v, hand_size))
+            }).max()
+        }).max().unwrap()
     }).max().unwrap()
 }
 
@@ -1253,6 +1256,48 @@ mod test {
         let community = make_cards(vec![(1, 1), (0, 2), (3, 3), (7, 0)]);
 
         players.get_mut(&0).unwrap().hand = make_cards(vec![(0, 3), (9, 1), (0, 2), (9, 3), (1, 0)]);
+        let mut state = make_test_calc_winners_state(players);
+        state.community_cards = community.into_iter().map(|cs| cs.card).collect();
+        let result = calc_winners(&omaha_hold_em(), &state, &vec![]).totals();
+        let expected: HashMap<PlayerRole, Chips> = vec![(0, 54)].into_iter().collect();
+        assert!(result == expected, "{:?} != {:?}", result, expected);
+    }
+
+    #[test]
+    fn test_calc_winners_omaha_2() {
+        let mut players = HashMap::new();
+        players.insert(0, PlayerState {
+            chips: 0,
+            hand: make_cards(vec![(2, 2), (NUM_RANKS-1,1), (NUM_RANKS-2, 2), (0, 2),]),
+            folded: false,
+            total_bet: 17
+        });
+        players.insert(1, PlayerState {
+            chips: 0,
+            hand: make_cards(vec![(3, 2), (1,2), (5, 0), (9, 3)]),
+            folded: true,
+            total_bet: 8
+        });
+        players.insert(2, PlayerState {
+            chips: 0,
+            hand: make_cards(vec![(8,3), (7, 3), (6, 3), (5, 3)]),
+            folded: false,
+            total_bet: 12
+        });
+        players.insert(3, PlayerState {
+            chips: 0,
+            hand: make_cards(vec![(12, 0), (12, 1), (9, 1), (12, 3)]),
+            folded: false,
+            total_bet: 17
+        });
+        let community = make_cards(vec![(0, 1), (4, 2), (10, 3), (9, 0), (10, 0)]);
+        let community_cards: CardTuple = community.iter().map(|cs| cs.card).collect();
+
+        //players.get_mut(&0).unwrap().hand = make_cards(vec![(0, 3), (9, 1), (0, 2), (9, 3), (1, 0)]);
+        let strength = combinations(&players.get(&0).unwrap().hand, 2).into_iter().map(|combo| {
+            best_hand(combo.iter().map(|cs| cs.card).collect(), community_cards.clone(), 5, &vec![])
+        }).max().unwrap();
+        assert!(strength.kind == Kind::Straight(NUM_RANKS), "{:?}", strength.kind);
         let mut state = make_test_calc_winners_state(players);
         state.community_cards = community.into_iter().map(|cs| cs.card).collect();
         let result = calc_winners(&omaha_hold_em(), &state, &vec![]).totals();
