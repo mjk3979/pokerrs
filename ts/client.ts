@@ -392,6 +392,9 @@ function update_logs(update: ServerUpdate | null, log_page_change: number | null
         log_label.innerHTML = log.toString();
         log_list.appendChild(log_label);
     }
+    if (on_last_page) {
+        log_list.scrollTop = log_list.scrollHeight;
+    }
 }
 
 function draw(player_id: string, update: ServerUpdate) {
