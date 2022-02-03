@@ -162,7 +162,7 @@ impl TableState {
                 });
             }
         }
-        let round = self.old_logs.len();
+        let round = self.old_logs.len()+1;
         if self.cur_log.len() > start_from {
             let start = std::cmp::max(start_from, self.old_logs.last().map(|hl| hl.end).unwrap_or(0));
             retval.push(PokerLogUpdate {
