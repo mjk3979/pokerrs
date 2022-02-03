@@ -47,14 +47,18 @@ impl BotInputSource {
 impl PlayerInputSource for BotInputSource {
     async fn bet(&self, call_amount: Chips, min_bet: Chips) -> BetResp {
         let mstate = self.viewstate_rx.borrow();
-        let state = mstate.as_ref().unwrap();
-        self.bot.bet(state, call_amount, min_bet)
+        let state: &PokerViewState = mstate.as_ref().unwrap();
+        tokio::task::block_in_place(move || {
+            self.bot.bet(state, call_amount, min_bet)
+        })
     }
 
     async fn replace(&self, max_can_replace: usize) -> ReplaceResp {
         let mstate = self.viewstate_rx.borrow();
         let state = mstate.as_ref().unwrap();
-        self.bot.replace(state, max_can_replace)
+        tokio::task::block_in_place(move || {
+            self.bot.replace(state, max_can_replace)
+        })
     }
 
     async fn dealers_choice(&self, variants: Vec<PokerVariantDesc>) -> DealersChoiceResp {
