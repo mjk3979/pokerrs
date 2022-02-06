@@ -1,6 +1,7 @@
 use crate::card::*;
 use crate::game::*;
 use crate::gamestate::*;
+use crate::special_card::*;
 use crate::table::*;
 use crate::gamestate;
 
@@ -412,6 +413,9 @@ impl std::fmt::Display for TableEvent {
             },
             VariantChange {new_variant_desc} => {
                 write!(f, "Game changed to {}", new_variant_desc.name)?;
+                for SpecialCardGroupDesc{name, ..} in &new_variant_desc.special_cards {
+                    write!(f, "\n{}", name)?;
+                }
             },
             AnteChange {new_table_rules} => {
                 use AnteRule::*;

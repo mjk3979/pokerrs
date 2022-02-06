@@ -56,7 +56,8 @@ pub struct PokerViewUpdate {
 #[derive(Clone, Debug, Eq, Hash, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
 #[derive(TS)]
 pub struct PokerVariantDesc {
-    pub name: String
+    pub name: String,
+    pub special_cards: Vec<SpecialCardGroupDesc>,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -69,7 +70,7 @@ pub struct PokerVariants {
 #[derive(TS)]
 pub struct DealersChoiceResp {
     pub variant_idx: usize,
-    pub special_cards: Vec<SpecialCard>,
+    pub special_cards: Vec<usize>,
 }
 
 #[async_trait]
@@ -94,6 +95,7 @@ pub enum Round {
     },
     Replace {
         max_replace_fun: fn (&PlayerState) -> usize,
+        max_possible_replace: usize,
     }
 }
 
@@ -259,7 +261,8 @@ pub fn five_card_draw() -> PokerVariant {
                 starting_player: 1
             },
             Replace {
-                max_replace_fun: three_or_four_with_ace
+                max_replace_fun: three_or_four_with_ace,
+                max_possible_replace: 4,
             },
             Bet {
                 starting_player: 1
@@ -271,26 +274,26 @@ pub fn five_card_draw() -> PokerVariant {
 
 impl PokerVariantDesc {
     pub fn variant(&self) -> PokerVariant {
-        PokerVariants::table().remove(self).unwrap()
+        PokerVariants::table().remove(&self.name).unwrap()
     }
 }
 
 
 impl PokerVariants {
-    pub fn table() -> HashMap<PokerVariantDesc, PokerVariant> {
+    pub fn table() -> HashMap<String, PokerVariant> {
         vec![
-            ("Texas Hold 'Em", texas_hold_em()),
-            ("Omaha Hold 'Em", omaha_hold_em()),
-            ("Seven Card Stud", seven_card_stud()),
-            ("Five Card Stud", five_card_stud()),
-            ("Five Card Draw", five_card_draw())
+            ("Texas Hold 'Em".to_string(), texas_hold_em()),
+            ("Omaha Hold 'Em".to_string(), omaha_hold_em()),
+            ("Seven Card Stud".to_string(), seven_card_stud()),
+            ("Five Card Stud".to_string(), five_card_stud()),
+            ("Five Card Draw".to_string(), five_card_draw())
         ].into_iter().map(|(name, v)| {
-            (PokerVariantDesc{name: name.to_string()}, v)
+            (name, v)
         }).collect()
     }
 
     pub fn all() -> PokerVariants {
-        let mut descs: Vec<PokerVariantDesc> = PokerVariants::table().keys().cloned().collect();
+        let mut descs: Vec<PokerVariantDesc> = PokerVariants::table().into_iter().map(|(name, _)| PokerVariantDesc{name, special_cards: SpecialCardGroupDesc::all()}).collect();
         descs.sort();
         PokerVariants{descs}
     }
@@ -303,4 +306,19 @@ impl DealersChoiceResp {
             special_cards: Vec::new(),
         }
     }
+}
+
+pub fn variant_max_players(variant: &PokerVariant, num_cards: usize) -> usize {
+    let mut per_player = 0;
+    let mut community = 0;
+    for round in &variant.rules {
+        use Round::*;
+        match round {
+            DrawToHand{facing} => per_player += facing.len(),
+            DrawToCommunity{quant} => community += quant,
+            Replace{max_possible_replace, ..} => per_player += max_possible_replace,
+            _ => {}
+        }
+    }
+    (num_cards - community) / per_player
 }

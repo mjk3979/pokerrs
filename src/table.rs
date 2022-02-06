@@ -92,6 +92,13 @@ impl PokerVariantSelector {
             PokerVariantSelector::DealersChoice(v) => !v.descs.is_empty(),
         }
     }
+
+    pub fn all<'a>(&'a self) -> Vec<PokerVariant> {
+        match self {
+            PokerVariantSelector::Rotation(v) => v.descs.iter().map(|v| v.variant()).collect(),
+            PokerVariantSelector::DealersChoice(v) => v.descs.iter().map(|v| v.variant()).collect(),
+        }
+    }
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -117,6 +124,12 @@ pub struct Table {
 pub enum JoinError {
     Full,
     AlreadyJoined
+}
+
+impl TableConfig {
+    pub fn is_valid(&self) -> bool {
+        self.variant_selector.is_valid() && self.variant_selector.all().into_iter().all(|v| self.max_players < variant_max_players(&v, standard_deck().raw.len()))
+    }
 }
 
 impl TableState {
@@ -261,12 +274,15 @@ impl Table {
                     let mut state = self.state.lock().unwrap();
                     state.variant_state = PokerVariantState::Rotation{variants, idx};
                 }
-                (retval, desc, Vec::new())
+                let special_cards = desc.special_cards.iter().flat_map(|desc| SpecialCardGroup::from(desc).cards).collect();
+                (retval, desc, special_cards)
             },
             PokerVariantState::DealersChoice{variants} => {
                 let DealersChoiceResp{variant_idx: idx, special_cards} = dealer.input.dealers_choice(variants.descs.clone()).await;
-                let desc = variants.descs.get(idx).unwrap().clone();
-                (desc.variant(), desc, special_cards)
+                let mut desc = variants.descs.get(idx).unwrap().clone();
+                let special_cards_cards = special_cards.iter().flat_map(|&idx| SpecialCardGroup::from(desc.special_cards.get(idx).unwrap()).cards).collect();
+                desc.special_cards = special_cards.iter().map(|idx| desc.special_cards.get(*idx).cloned().unwrap()).collect();
+                (desc.variant(), desc, special_cards_cards)
             },
         }
     }

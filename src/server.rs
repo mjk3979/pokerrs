@@ -2,6 +2,7 @@ use crate::auth::*;
 use crate::card::*;
 use crate::game::*;
 use crate::id_counter::*;
+use crate::special_card::*;
 use crate::table::*;
 use crate::template::*;
 use crate::viewstate::*;
@@ -225,12 +226,20 @@ impl PlayerInputSource for GameServerPlayerInputSource {
     }
 }
 
+fn special_card_option_html(groups: &[SpecialCardGroup]) -> String {
+    groups.iter().enumerate().map(|(idx, group)| {
+        format!("<div class=\"vlist\">
+            <label class=\"special_card_settings_label\">{}</label>
+            </div>", group.name)
+    }).collect::<Vec<String>>().join("\n")
+}
 
 fn default_template_variables() -> HashMap<String, String> {
     vec![
         ("ALL_VARIANTS".to_string(), PokerVariants::all().descs.into_iter().map(|desc| {
-            format!("<option value=\"{}\">{}</option>", desc.name, desc.name)
+            format!("<input type=\"button\" class=\"settings_variant_button\" value=\"{}\" />", desc.name)
         }).collect::<Vec<String>>().join("\n")),
+        ("ALL_SPECIAL_CARDS".to_string(), special_card_option_html(&SpecialCardGroup::all())),
     ].into_iter().collect()
 }
 
@@ -414,8 +423,8 @@ impl GameServer {
 
     fn create_table(&self, params: ServerTableParameters) -> Result<TableId, String> {
         let ServerTableParameters{table_config, ante_rule} = params;
-        if !table_config.variant_selector.is_valid() {
-            return Err("Must select at least one variant".to_string());
+        if !table_config.is_valid() {
+            return Err("Invalid table config".to_string());
         }
         let gametable = Arc::new({
             let starting_rules = ante_rule.starting_rules();
@@ -652,6 +661,7 @@ impl GameServer {
                         if let Some(conn) = self.get_player(&table, player_id) {
                             if let Ok(resp) = serde_json::from_slice::<DealersChoiceResp>(&hyper::body::to_bytes(req.into_body()).await.unwrap()) {
                                 conn.dealers_choice_tx.send(resp);
+                                *response.status_mut() = StatusCode::OK;
                             } else {
                                 println!("Failed to parse request");
                             }

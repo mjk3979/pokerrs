@@ -64,9 +64,10 @@ impl PlayerInputSource for BotInputSource {
     async fn dealers_choice(&self, variants: Vec<PokerVariantDesc>) -> DealersChoiceResp {
         let mut rng = rand::thread_rng();
         let variant_idx = rng.gen_range(0..variants.len());
+        let variant = &variants[variant_idx];
         DealersChoiceResp {
             variant_idx,
-            special_cards: Vec::new(),
+            special_cards: (0..variant.special_cards.len()).filter(|_| rng.gen_range(0u32..2) == 0u32).collect(),
         }
     }
 

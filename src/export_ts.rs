@@ -39,6 +39,8 @@ export! {
     ServerUpdate,
     SpecialCardType,
     SpecialCard,
+    SpecialCardGroup,
+    SpecialCardGroupDesc,
     DealersChoiceResp,
     AnteRuleChangeDesc,
     AnteRuleDesc,

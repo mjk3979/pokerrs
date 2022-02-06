@@ -58,7 +58,7 @@ impl RoundState {
             },
             Round::DrawToHand{facing} => RoundState::DrawToHand{facing: facing.clone()},
             Round::DrawToCommunity{quant} => RoundState::DrawToCommunity{quant: *quant},
-            Round::Replace{max_replace_fun} => RoundState::Replace {
+            Round::Replace{max_replace_fun, ..} => RoundState::Replace {
                 max_replace_fun: *max_replace_fun
             },
         }

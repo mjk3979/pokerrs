@@ -14,6 +14,7 @@ import {
     AnteRuleDesc,
     AnteRuleChangeDesc,
     ServerTableParameters,
+    SpecialCardGroupDesc,
 } from "./pokerrs.ts";
 
 var auth_token: string | null = null;
@@ -261,6 +262,22 @@ function draw_players(player_id: string, viewstate: PokerViewState | null, table
     }
 }
 
+function draw_dealers_choice_special_cards(groups: SpecialCardGroupDesc[]) {
+    const special_cards_choice_list = <HTMLElement>document.getElementById("special_cards_choice_list");
+    special_cards_choice_list.innerHTML = "";
+    for (const group of groups) {
+        const div = document.createElement("div");
+        const label = document.createElement("label");
+        const radio = document.createElement("input");
+        radio.classList.add("special_cards_choice");
+        radio.setAttribute("type", "checkbox");
+        label.innerHTML = group.name;
+        label.appendChild(radio);
+        div.appendChild(label);
+        special_cards_choice_list.appendChild(div);
+    }
+}
+
 function draw_action(action: ServerActionRequest | null, viewstate: PokerViewState | null) {
     const call_button = <HTMLInputElement>document.getElementById("call_button")!;
     const fold_button = document.getElementById("fold_button")!;
@@ -329,15 +346,21 @@ function draw_action(action: ServerActionRequest | null, viewstate: PokerViewSta
 
         for (let vidx = 0; vidx < action.data.variants.length; vidx += 1) {
             const desc = action.data.variants[vidx];
+            const label = document.createElement("label");
             const button = document.createElement("input");
-            button.setAttribute("type", "button");
+            button.setAttribute("type", "radio");
+            button.setAttribute("name", "dealers_choice_button");
             button.classList.add("dealers_choice_button");
-            button.value = desc.name;
+            label.innerHTML = desc.name;
+            const cidx = vidx;
             button.addEventListener('click', () => {
-                dealers_choice(vidx);
+                const desc = action.data.variants[cidx];
+                draw_dealers_choice_special_cards(desc.special_cards);
             });
-            dealers_choice_list.appendChild(button);
+            label.appendChild(button);
+            dealers_choice_list.appendChild(label);
         }
+        draw_dealers_choice_special_cards([]);
     } else {
         call_button.setAttribute("disabled", "");
         fold_button.setAttribute("disabled", "");
@@ -408,6 +431,11 @@ function draw(player_id: string, update: ServerUpdate) {
     draw_action(action, viewstate);
 
     variant_label.innerHTML = update.table.running_variant?.name ?? "Waiting for next game...";
+    if (update.table.running_variant) {
+        for (const group of update.table.running_variant.special_cards) {
+            variant_label.innerHTML += `<br>${group.name}`;
+        }
+    }
 
     if (update.table.running) {
         start_server_button.classList.add("hidden");
@@ -471,34 +499,37 @@ function join() {
     });
 }
 
-function dealers_choice(idx: number) {
+function dealers_choice() {
     const player_input = document.getElementById("name_input");
     const player_id = (<HTMLInputElement>player_input).value.trim();
-    const two_wild = (<HTMLInputElement>document.getElementById("two_wild")).checked;
-    const king_axe = (<HTMLInputElement>document.getElementById("king_axe")).checked;
     const dealers_choice_list = <HTMLElement>document.getElementById("dealers_choice_list");
+    const special_cards_choice_list = <HTMLElement>document.getElementById("special_cards_choice_list");
     let revert = () => {
         for (const element of dealers_choice_list.getElementsByClassName("dealers_choice_button")) {
             element.removeAttribute("disabled");
         }
-    };
-    for (const element of dealers_choice_list.getElementsByClassName("dealers_choice_button")) {
-        (<HTMLElement>element).setAttribute("disabled", "");
-    }
-    let special_cards = [];
-    if (two_wild) {
-        for (let suit=0; suit<4; suit+=1) {
-            special_cards.push({
-                wtype: <SpecialCardType>"Wild",
-                card: {rank: 1, suit: suit}
-            });
+        for (const element of special_cards_choice_list.getElementsByClassName("special_cards_choice")) {
+            element.removeAttribute("disabled");
         }
+    };
+    let idx = 0;
+    let element_idx = 0;
+    for (const element of dealers_choice_list.getElementsByClassName("dealers_choice_button")) {
+        const box = <HTMLInputElement>element;
+        if (box.checked) {
+            idx = element_idx;
+        }
+        (<HTMLElement>element).setAttribute("disabled", "");
+        element_idx += 1;
     }
-    if (king_axe) {
-        special_cards.push({
-            wtype: <SpecialCardType>"WinsItAll",
-            card: {rank: 12, suit: 2}
-        });
+    let sidx = 0;
+    let special_cards = [];
+    for (const element of special_cards_choice_list.getElementsByClassName("special_cards_choice")) {
+        if ((<HTMLInputElement>element).checked) {
+            special_cards.push(sidx);
+        }
+        sidx += 1;
+        (<HTMLElement>element).setAttribute("disabled", "");
     }
     let resp: DealersChoiceResp = {
         variant_idx: idx,
@@ -617,40 +648,100 @@ function call_button_clicked() {
     }
 }
 
-function change_variant_clicked(change: 'add' | 'remove') {
-    const included_list = document.getElementById("variants_included")!;
-    const excluded_list = document.getElementById("variants_excluded")!;
+var included_variants: [string, boolean[]][] = [];
 
-    if (change == 'add') {
-        let new_included = [];
-        for (const opt of included_list.children) {
-            new_included.push(opt);
+function change_variant_clicked(variant_name: string) {
+    const rotation_input = <HTMLInputElement>document.getElementById("rotation_input")!;
+    const special_card_template = document.getElementById("special_card_template")!;
+    const rotation = rotation_input.checked;
+
+    let num_special_cards = 0;
+    for (const input of special_card_template.getElementsByClassName("special_card_settings_label")) {
+        num_special_cards += 1;
+    }
+
+    if (!rotation && included_variants.findIndex(([v, l]) => v == variant_name) != -1) {
+        return;
+    }
+    let special_cards = [];
+    for (let i = 0; i < num_special_cards; ++i) {
+        special_cards.push(false);
+    }
+    included_variants.push([variant_name, special_cards]);
+    draw_settings_variants();
+}
+
+function remove_variant(idx: number) {
+    included_variants.splice(idx, 1);
+    draw_settings_variants();
+}
+
+function draw_settings_variants() {
+    const special_card_template = document.getElementById("special_card_template")!;
+    let special_card_names = [];
+    for (const input of special_card_template.getElementsByClassName("special_card_settings_label")) {
+        special_card_names.push(input.innerHTML);
+    }
+
+    const rotation_input = <HTMLInputElement>document.getElementById("rotation_input")!;
+    const rotation = rotation_input.checked;
+
+    let idx = 0;
+    const variant_list = document.getElementById("included_variant_list")!;
+    variant_list.innerHTML = "";
+    let seen: string[] = [];
+    for (const [name, special_cards] of included_variants) {
+        if (!rotation && seen.includes(name)) {
+            continue;
         }
-        let new_excluded = [];
-        for (const opt of excluded_list.children) {
-            if ((<HTMLOptionElement>opt).selected) {
-                new_included.push(opt);
-            } else {
-                new_excluded.push(opt);
+        seen.push(name);
+        const div = document.createElement("div");
+
+        const delete_button = document.createElement("input");
+        delete_button.setAttribute("type", "button");
+        delete_button.value = "X";
+        delete_button.classList.add("fold_button");
+        const captured_idx = idx;
+        delete_button.addEventListener('click', () => {
+            remove_variant(captured_idx);
+        });
+        div.appendChild(delete_button);
+
+        const label = document.createElement("span");
+        label.innerHTML = name;
+        label.classList.add("variant_span");
+        div.appendChild(label);
+
+        let special_card_idx = 0;
+        for (const should_check of special_cards) {
+            const label = document.createElement("label");
+            const checkbox = document.createElement("input");
+            checkbox.setAttribute("type", "checkbox");
+            checkbox.classList.add("special_card_settings_checkbox");
+            if (should_check) {
+                checkbox.setAttribute("checked", "");
             }
+            const captured_card_idx = special_card_idx;
+            checkbox.addEventListener('change', () => {
+                included_variants[captured_idx][1][captured_card_idx] = checkbox.checked;
+            });
+            label.innerHTML = special_card_names[special_card_idx];
+            label.appendChild(checkbox);
+            div.appendChild(label);
+            special_card_idx += 1;
         }
-        included_list.replaceChildren(...new_included);
-        excluded_list.replaceChildren(...new_excluded);
-    } else if (change == 'remove') {
-        let new_included = [];
-        let new_excluded = [];
-        for (const opt of excluded_list.children) {
-            new_excluded.push(opt);
+
+        variant_list.appendChild(div);
+        idx += 1;
+    }
+    
+    for (const ele of document.getElementsByClassName("settings_variant_button")) {
+        const button = <HTMLInputElement>ele;
+        if (!rotation && seen.includes(button.value)) {
+            button.setAttribute("disabled", "");
+        } else {
+            button.removeAttribute("disabled");
         }
-        for (const opt of included_list.children) {
-            if ((<HTMLOptionElement>opt).selected) {
-                new_excluded.push(opt);
-            } else {
-                new_included.push(opt);
-            }
-        }
-        included_list.replaceChildren(...new_included);
-        excluded_list.replaceChildren(...new_excluded);
     }
 }
 
@@ -692,13 +783,30 @@ function create_table() {
     const starting_chips_input = <HTMLInputElement>document.getElementById("starting_chips_input")!;
     const dealers_choice_input = <HTMLInputElement>document.getElementById("dealers_choice_input")!;
     const rotation_input = <HTMLInputElement>document.getElementById("rotation_input")!;
-    const included_list = document.getElementById("variants_included")!;
+    const included_list = document.getElementById("included_variant_list")!;
 
     create_table_button.setAttribute("disabled", "");
 
+    const special_card_template = document.getElementById("special_card_template")!;
+    let special_card_names = [];
+    for (const input of special_card_template.getElementsByClassName("special_card_settings_label")) {
+        special_card_names.push(input.innerHTML);
+    }
+
     let variants: Array<PokerVariantDesc> = [];
-    for (const opt of included_list.children) {
-        variants.push({name: (<HTMLOptionElement>opt).value});
+    for (const variant_label of included_list.getElementsByClassName("variant_span")) {
+        let special_cards = [];
+        let special_card_idx = 0;
+        for (const special_card_checkbox of (<HTMLElement>variant_label.parentNode).getElementsByClassName("special_card_settings_checkbox")) {
+            if ((<HTMLInputElement>special_card_checkbox).checked) {
+                special_cards.push({name: special_card_names[special_card_idx]});
+            }
+            special_card_idx+=1;
+        }
+        variants.push({
+            name: variant_label.innerHTML,
+            special_cards: special_cards
+        });
     }
 
     let selector: PokerVariantSelector = {
@@ -755,6 +863,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const remove_variant_button = document.getElementById("settings_remove_variant_button")!;
     const table_settings_modal = document.getElementById("table_settings_modal")!;
     const create_table_button = document.getElementById("create_table_button")!;
+    const rotation_input = <HTMLInputElement>document.getElementById("rotation_input")!;
+    const dealers_choice_input = <HTMLInputElement>document.getElementById("dealers_choice_input")!;
+    const dealers_choice_submit = <HTMLInputElement>document.getElementById("dealers_choice_submit")!;
 
     player_input.addEventListener('click', () => {
         join();
@@ -783,15 +894,25 @@ document.addEventListener('DOMContentLoaded', () => {
     add_medium_bot_button.addEventListener('click', () => {
         add_bot(2);
     });
-    add_variant_button.addEventListener('click', () => {
-        change_variant_clicked('add');
-    });
-    remove_variant_button.addEventListener('click', () => {
-        change_variant_clicked('remove');
-    });
     create_table_button.addEventListener('click', () => {
         create_table();
     });
+    rotation_input.addEventListener('change', () => {
+        draw_settings_variants();
+    });
+    dealers_choice_input.addEventListener('change', () => {
+        draw_settings_variants();
+    });
+    dealers_choice_submit.addEventListener('click', () => {
+        dealers_choice();
+    });
+
+    for (const ele of document.getElementsByClassName("settings_variant_button")) {
+        const button = <HTMLInputElement>ele;
+        button.addEventListener('click', () => {
+            change_variant_clicked(button.value);
+        });
+    }
 
     const current_url = new URL(window.location.href);
     const table_id = current_url.searchParams.get("table_id");
