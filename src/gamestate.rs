@@ -43,6 +43,7 @@ pub enum RoundState {
         quant: usize
     },
     Replace {
+        player: PlayerRole,
         max_replace_fun: fn (&PlayerState) -> usize,
     },
 }
@@ -59,6 +60,7 @@ impl RoundState {
             Round::DrawToHand{facing} => RoundState::DrawToHand{facing: facing.clone()},
             Round::DrawToCommunity{quant} => RoundState::DrawToCommunity{quant: *quant},
             Round::Replace{max_replace_fun, ..} => RoundState::Replace {
+                player: 1,
                 max_replace_fun: *max_replace_fun
             },
         }
@@ -77,7 +79,7 @@ pub struct PlayerState {
     pub chips: Chips,
     pub hand: Vec<CardState>,
     pub folded: bool,
-    pub total_bet: Chips
+    pub total_bet: Chips,
 }
 
 type PlayersState = HashMap<PlayerRole, PlayerState>;
@@ -537,7 +539,7 @@ pub async fn play_poker<'a>(variant: PokerVariant,
         update_players(&players, &ids, &spectator_channel, &state, &viewdiffs, &rules, &variant, round);
         viewdiffs.clear();
         println!("Round");
-        match state.cur_round {
+        match state.cur_round.clone() {
             None => {
                 let end_game = state.players.iter().filter(|(role, player)| {
                     !player.folded
@@ -660,9 +662,16 @@ pub async fn play_poker<'a>(variant: PokerVariant,
                             state.cur_round = None;
                             continue;
                         }
-                        let player = state.players.get_mut(&bet_role).unwrap();
+
+                        let player = state.players.get(&bet_role).cloned().unwrap();
                         let mut this_bet = None;
                         if !player.folded && player.chips > player.total_bet + *all_bets.get(&bet_role).unwrap_or(&0) {
+
+                            viewdiffs.push(PokerGlobalViewDiff::Common(PokerViewDiff::TurnStart{player: bet_role}));
+                            update_players(&players, &ids, &spectator_channel, &state, &viewdiffs, &rules, &variant, round);
+                            viewdiffs.clear();
+                            let player = state.players.get_mut(&bet_role).unwrap();
+
                             println!("Waiting on {}", bet_role);
                             let f = players.get(&bet_role).unwrap().input.bet(last_bet_amount, min_bet);
                             match f.await {
@@ -688,33 +697,35 @@ pub async fn play_poker<'a>(variant: PokerVariant,
                             all_bets
                         });
                     },
-                    Replace{max_replace_fun} => {
-                        state.cur_round = None;
-                        let dealer = 0;
-                        let mut role = dealer;
-                        loop {
-                            role = next_player(role, num_players);
-                            let player = state.players.get(&role).unwrap();
-                            if !player.folded {
-                                let resp = players.get(&role).unwrap().input.replace(max_replace_fun(player)).await;
-                                let mut player = state.players.get_mut(&role).unwrap();
-                                let mut discard = Vec::new();
-                                let mut drawn = Vec::new();
-                                for idx in resp {
-                                    let old_card = player.hand[idx].clone();
-                                    discard.push(old_card);
-                                    player.hand[idx].card = state.deck.lock().unwrap().draw()?;
-                                    drawn.push(player.hand[idx].clone());
-                                }
-                                viewdiffs.push(PokerGlobalViewDiff::Replace {
-                                    player: role,
-                                    discard,
-                                    drawn
-                                });
+                    Replace{max_replace_fun, player} => {
+                        let mut role = player;
+                        let player = state.players.get(&role).cloned().unwrap();
+                        if !player.folded {
+                            viewdiffs.push(PokerGlobalViewDiff::Common(PokerViewDiff::TurnStart{player: role}));
+                            update_players(&players, &ids, &spectator_channel, &state, &viewdiffs, &rules, &variant, round);
+                            viewdiffs.clear();
+
+                            let resp = players.get(&role).unwrap().input.replace(max_replace_fun(&player)).await;
+                            let mut player = state.players.get_mut(&role).unwrap();
+                            let mut discard = Vec::new();
+                            let mut drawn = Vec::new();
+                            for idx in resp {
+                                let old_card = player.hand[idx].clone();
+                                discard.push(old_card);
+                                player.hand[idx].card = state.deck.lock().unwrap().draw()?;
+                                drawn.push(player.hand[idx].clone());
                             }
-                            if role == dealer {
-                                break;
-                            }
+                            viewdiffs.push(PokerGlobalViewDiff::Replace {
+                                player: role,
+                                discard,
+                                drawn
+                            });
+                        }
+                        role = next_player(role, num_players);
+                        if role == 1 {
+                            state.cur_round = None;
+                        } else {
+                            state.cur_round = Some(Replace{max_replace_fun, player: role});
                         }
                     }
                 }

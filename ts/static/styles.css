@@ -289,3 +289,17 @@ html, body {
     background-color: yellow;
     color: black;
 }
+
+.player_div {
+    padding: 1em;
+    border-radius: 1em;
+}
+
+.current_player_div {
+    background-color: darkcyan;
+}
+
+.folded_player_div {
+    background-color: gray;
+    opacity: 50%;
+}

@@ -62,6 +62,7 @@ pub struct PokerViewState {
     pub players: HashMap<PlayerRole, PlayerViewState>,
     pub community_cards: Vec<CardViewState>,
     pub bet_this_round: HashMap<PlayerRole, Chips>,
+    pub current_turn: Option<PlayerRole>,
 
     #[serde(skip_serializing)]
     pub rules: SpecialRules,
@@ -106,6 +107,9 @@ pub enum PokerViewDiff<P> {
     },
     Fold {
         player: P,
+    },
+    TurnStart {
+        player: P
     },
     Bet {
         bet_kind: BetDiffKind,
@@ -184,6 +188,9 @@ impl<P: std::fmt::Display> std::fmt::Display for PokerViewDiff<P> {
             },
             Fold {player} => {
                 write!(f, "{} folded :(", player)?;
+            },
+            TurnStart {player} => {
+                write!(f, "{} is taking their turn", player)?;
             },
             Bet {bet_kind, player, chips} => {
                 write!(f, "{} ", player)?;
@@ -281,6 +288,7 @@ impl<P: Clone + Eq + Hash> PokerViewDiff<P> {
             Draw{player, drawn} => Draw{player: mapping.get(player).cloned().unwrap(), drawn: drawn.clone()},
             CommunityDraw{drawn} => CommunityDraw{drawn: drawn.clone()},
             Fold{player} => Fold{player: mapping.get(player).cloned().unwrap()},
+            TurnStart{player} => TurnStart{player: mapping.get(player).cloned().unwrap()},
             Bet{bet_kind, player, chips} => Bet{bet_kind: bet_kind.clone(), player: mapping.get(player).cloned().unwrap(), chips: *chips},
             Replace{player, discard, drawn} => Replace{player: mapping.get(player).cloned().unwrap(), discard: discard.clone(), drawn: drawn.clone()},
             ShowCards{player, shown, strength} => ShowCards{player: mapping.get(player).cloned().unwrap(), shown: shown.clone(), strength: strength.clone()},
@@ -347,16 +355,19 @@ impl PokerViewState {
             card: c,
             facing: FaceUp
         })).collect();
-        let bet_this_round = if let Some(RoundState::Bet{all_bets, ..}) = &state.cur_round {
-            all_bets.clone()
+        let (bet_this_round, current_turn) = if let Some(RoundState::Bet{all_bets, player, ..}) = &state.cur_round {
+            (all_bets.clone(), Some(*player))
+        } else if let Some(RoundState::Replace{player, ..}) = &state.cur_round {
+            (HashMap::new(), Some(*player))
         } else {
-            HashMap::new()
+            (HashMap::new(), None)
         };
         PokerViewState {
             role: player,
             players,
             community_cards,
             bet_this_round,
+            current_turn,
             rules: rules.clone(),
             variant: PokerVariantViewState {
                 use_from_hand: variant.use_from_hand

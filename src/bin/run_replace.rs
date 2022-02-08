@@ -43,6 +43,7 @@ fn main() {
         variant: PokerVariantViewState {
             use_from_hand: 5
         },
+        current_turn: Some(0),
     };
     let resp = best_replace(&vs, 4);
     println!("{:?}", resp);

@@ -355,6 +355,7 @@ mod test {
             variant: PokerVariantViewState {
                 use_from_hand: 2
             },
+            current_turn: Some(0),
         };
 
         let r = win_ratio(&vs);
@@ -388,6 +389,7 @@ mod test {
             variant: PokerVariantViewState {
                 use_from_hand: 2
             },
+            current_turn: Some(0),
         };
 
         let r = win_ratio(&vs);
@@ -423,6 +425,7 @@ mod test {
             variant: PokerVariantViewState {
                 use_from_hand: 5
             },
+            current_turn: Some(0),
         };
 
         let r = win_ratio(&vs);
@@ -459,6 +462,7 @@ mod test {
             variant: PokerVariantViewState {
                 use_from_hand: 5
             },
+            current_turn: Some(0),
         };
         let resp = best_replace(&vs, 4);
         assert!(resp == vec![3,4], "{:?}", resp);

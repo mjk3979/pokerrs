@@ -42,6 +42,7 @@ fn test_win_ratio_perf_small() {
         variant: PokerVariantViewState {
             use_from_hand: 2
         },
+        current_turn: Some(0),
     };
 
     let r = win_ratio(&vs);
@@ -97,6 +98,7 @@ fn test_win_ratio_perf_twos_wild() {
         variant: PokerVariantViewState {
             use_from_hand: 5
         },
+        current_turn: Some(0),
     };
 
     let r = win_ratio(&vs);
@@ -165,6 +167,7 @@ fn test_win_ratio_perf() {
         variant: PokerVariantViewState {
             use_from_hand: 2
         },
+        current_turn: Some(0),
     };
 
     let ratio = win_ratio(&vs);
@@ -196,6 +199,7 @@ fn test_replace(num_opponents: usize) {
         variant: PokerVariantViewState {
             use_from_hand: 5
         },
+        current_turn: Some(0),
     };
     let resp = best_replace(&vs, 4);
 }

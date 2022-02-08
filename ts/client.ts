@@ -135,11 +135,19 @@ function make_player_screen(role: number, player_id: string, viewstate: PokerVie
     const template = document.getElementById("player_div")!;
     let player_screen = <HTMLElement>template.cloneNode(true);
     player_screen.id = `player_div_${player_id}`;
+    player_screen.classList.remove("current_player_div");
+    if (viewstate.current_turn == role) {
+        player_screen.classList.add("current_player_div");
+    }
     const player_label = player_screen.getElementsByClassName("player_name")[0]!;
     const player_chips_label = player_screen?.getElementsByClassName("player_chips")[0]!;
     const poker_button_span = player_screen.getElementsByClassName("poker_button")[0]!;
     const player_cards = player_screen?.getElementsByClassName("card_container")[0]!;
     const player_chips = player.chips - player.total_bet - (viewstate.bet_this_round[role] ?? 0);
+    player_screen.classList.remove("folded_player_div");
+    if (player.folded) {
+        player_screen.classList.add("folded_player_div");
+    }
     poker_button_span.innerHTML = "";
     poker_button_span.classList.remove("dealer_button");
     poker_button_span.classList.remove("small_blind_button");
@@ -168,6 +176,8 @@ function make_table_player_screen(idx: number, player_id: string, table: TableVi
     const template = document.getElementById("player_div")!;
     let player_screen = <HTMLElement>template.cloneNode(true);
     player_screen.id = `player_div_table_${idx}`;
+    player_screen.classList.remove("current_player_div");
+    player_screen.classList.remove("folded_player_div");
     const player_label = player_screen.getElementsByClassName("player_name")[0]!;
     const player_chips_label = player_screen?.getElementsByClassName("player_chips")[0]!;
     const poker_button_span = player_screen.getElementsByClassName("poker_button")[0]!;
@@ -197,6 +207,8 @@ function make_empty_player_screen(idx: number): HTMLElement {
     const template = document.getElementById("player_div")!;
     let player_screen = <HTMLElement>template.cloneNode(true);
     player_screen.id = `player_div_empty_${idx}`;
+    player_screen.classList.remove("current_player_div");
+    player_screen.classList.remove("folded_player_div");
     const player_label = player_screen.getElementsByClassName("player_name")[0]!;
     const player_chips_label = player_screen?.getElementsByClassName("player_chips")[0]!;
     const poker_button_span = player_screen.getElementsByClassName("poker_button")[0]!;
@@ -222,12 +234,21 @@ function draw_players(player_id: string, viewstate: PokerViewState | null, table
     const poker_button_span = player_screen.getElementsByClassName("poker_button")[0]!;
     const player = viewstate?.players[viewstate.role];
     const player_cards = player_screen.getElementsByClassName("card_container")[0]!;
+    player_screen.classList.remove("current_player_div");
+    player_screen.classList.remove("folded_player_div");
     player_label.innerHTML = player_id;
     poker_button_span.innerHTML = "";
     poker_button_span.classList.remove("dealer_button");
     poker_button_span.classList.remove("small_blind_button");
     poker_button_span.classList.remove("big_blind_button");
     if (player) {
+        if (viewstate.current_turn == viewstate.role) {
+            player_screen.classList.add("current_player_div");
+        }
+        if (player.folded) {
+            player_screen.classList.add("folded_player_div");
+        }
+
         const player_chips = player.chips - player.total_bet - (viewstate?.bet_this_round[viewstate.role] ?? 0);
         const player_id = table.roles![viewstate.role]!;
         const button = table.buttons[player_id];
