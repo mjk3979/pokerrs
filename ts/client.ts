@@ -130,15 +130,31 @@ function make_card(card: CardViewState): HTMLElement {
     return img;
 }
 
-function make_player_screen(role: number, player_id: string, viewstate: PokerViewState): HTMLElement {
+function make_player_screen(role: number, player_id: string, viewstate: PokerViewState, table: TableViewState): HTMLElement {
     const player = viewstate.players[role];
     const template = document.getElementById("player_div")!;
     let player_screen = <HTMLElement>template.cloneNode(true);
     player_screen.id = `player_div_${player_id}`;
     const player_label = player_screen.getElementsByClassName("player_name")[0]!;
     const player_chips_label = player_screen?.getElementsByClassName("player_chips")[0]!;
+    const poker_button_span = player_screen.getElementsByClassName("poker_button")[0]!;
     const player_cards = player_screen?.getElementsByClassName("card_container")[0]!;
     const player_chips = player.chips - player.total_bet - (viewstate.bet_this_round[role] ?? 0);
+    poker_button_span.innerHTML = "";
+    poker_button_span.classList.remove("dealer_button");
+    poker_button_span.classList.remove("small_blind_button");
+    poker_button_span.classList.remove("big_blind_button");
+    const button = table.buttons[player_id];
+    if (button == "Dealer") {
+        poker_button_span.innerHTML = "D";
+        poker_button_span.classList.add("dealer_button");
+    } else if (button == "BigBlind") {
+        poker_button_span.innerHTML = "BB";
+        poker_button_span.classList.add("big_blind_button");
+    } else if (button == "SmallBlind") {
+        poker_button_span.innerHTML = "SB";
+        poker_button_span.classList.add("small_blind_button");
+    }
     player_label.innerHTML = player_id;
     player_chips_label.innerHTML = `${player_chips} 🪙`;
     player_cards.innerHTML = "";
@@ -148,13 +164,29 @@ function make_player_screen(role: number, player_id: string, viewstate: PokerVie
     return player_screen;
 }
 
-function make_table_player_screen(idx: number, player_id: string): HTMLElement {
+function make_table_player_screen(idx: number, player_id: string, table: TableViewState): HTMLElement {
     const template = document.getElementById("player_div")!;
     let player_screen = <HTMLElement>template.cloneNode(true);
     player_screen.id = `player_div_table_${idx}`;
     const player_label = player_screen.getElementsByClassName("player_name")[0]!;
     const player_chips_label = player_screen?.getElementsByClassName("player_chips")[0]!;
+    const poker_button_span = player_screen.getElementsByClassName("poker_button")[0]!;
     const player_cards = player_screen?.getElementsByClassName("card_container")[0]!;
+    poker_button_span.innerHTML = "";
+    poker_button_span.classList.remove("dealer_button");
+    poker_button_span.classList.remove("small_blind_button");
+    poker_button_span.classList.remove("big_blind_button");
+    const button = table.buttons[player_id];
+    if (button == "Dealer") {
+        poker_button_span.innerHTML = "D";
+        poker_button_span.classList.add("dealer_button");
+    } else if (button == "BigBlind") {
+        poker_button_span.innerHTML = "BB";
+        poker_button_span.classList.add("big_blind_button");
+    } else if (button == "SmallBlind") {
+        poker_button_span.innerHTML = "SB";
+        poker_button_span.classList.add("small_blind_button");
+    }
     player_label.innerHTML = player_id;
     player_chips_label.innerHTML = "";
     player_cards.innerHTML = "";
@@ -167,7 +199,12 @@ function make_empty_player_screen(idx: number): HTMLElement {
     player_screen.id = `player_div_empty_${idx}`;
     const player_label = player_screen.getElementsByClassName("player_name")[0]!;
     const player_chips_label = player_screen?.getElementsByClassName("player_chips")[0]!;
+    const poker_button_span = player_screen.getElementsByClassName("poker_button")[0]!;
     const player_cards = player_screen?.getElementsByClassName("card_container")[0]!;
+    poker_button_span.innerHTML = "";
+    poker_button_span.classList.remove("dealer_button");
+    poker_button_span.classList.remove("small_blind_button");
+    poker_button_span.classList.remove("big_blind_button");
     player_label.innerHTML = "Empty Seat";
     player_chips_label.innerHTML = "";
     player_cards.innerHTML = "";
@@ -182,11 +219,28 @@ function draw_players(player_id: string, viewstate: PokerViewState | null, table
     const player_screen = document.getElementById("player_div")!;
     const player_label = player_screen.getElementsByClassName("player_name")[0]!;
     const player_chips_label = player_screen.getElementsByClassName("player_chips")[0]!;
+    const poker_button_span = player_screen.getElementsByClassName("poker_button")[0]!;
     const player = viewstate?.players[viewstate.role];
     const player_cards = player_screen.getElementsByClassName("card_container")[0]!;
     player_label.innerHTML = player_id;
+    poker_button_span.innerHTML = "";
+    poker_button_span.classList.remove("dealer_button");
+    poker_button_span.classList.remove("small_blind_button");
+    poker_button_span.classList.remove("big_blind_button");
     if (player) {
         const player_chips = player.chips - player.total_bet - (viewstate?.bet_this_round[viewstate.role] ?? 0);
+        const player_id = table.roles![viewstate.role]!;
+        const button = table.buttons[player_id];
+        if (button == "Dealer") {
+            poker_button_span.innerHTML = "D";
+            poker_button_span.classList.add("dealer_button");
+        } else if (button == "BigBlind") {
+            poker_button_span.innerHTML = "BB";
+            poker_button_span.classList.add("big_blind_button");
+        } else if (button == "SmallBlind") {
+            poker_button_span.innerHTML = "SB";
+            poker_button_span.classList.add("small_blind_button");
+        }
         player_chips_label.innerHTML = `${player_chips} 🪙`;
         player_cards.innerHTML = "";
         for (let cidx = 0; cidx < player.hand.length; cidx += 1) {
@@ -239,12 +293,12 @@ function draw_players(player_id: string, viewstate: PokerViewState | null, table
                     if (role == viewstate.role) {
                         return {kind: "skip"};
                     }
-                    return {kind: "draw", data: make_player_screen(role, player_id, viewstate)};
+                    return {kind: "draw", data: make_player_screen(role, player_id, viewstate, table)};
                 } else {
                     return {kind: "skip"};
                 }
             } else if (player_id) {
-                return {kind: "draw", data: make_table_player_screen(iseat, player_id)};
+                return {kind: "draw", data: make_table_player_screen(iseat, player_id, table)};
             } else {
                 return {kind: "draw", data: make_empty_player_screen(iseat)};
             }

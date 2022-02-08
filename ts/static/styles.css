@@ -266,3 +266,26 @@ html, body {
 .variant_span {
     flex: 2 0 fit-content;
 }
+
+.poker_button {
+    width: 2em;
+    height: 2em;
+    line-height: 2em;
+    text-align: center;
+    border-radius: 1em;
+}
+
+.dealer_button {
+    background-color: white;
+    color: black;
+}
+
+.small_blind_button {
+    background-color: blue;
+    color: white;
+}
+
+.big_blind_button {
+    background-color: yellow;
+    color: black;
+}

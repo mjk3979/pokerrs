@@ -15,6 +15,7 @@ export! {
     PokerLogUpdate,
     CardViewState,
     PlayerViewState,
+    PokerButton,
     PokerVariantViewState,
     PokerViewState,
     TableConfig,

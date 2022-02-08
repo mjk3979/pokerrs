@@ -67,6 +67,7 @@ struct TableState {
     seats: BTreeMap<Seat, PlayerId>,
     last_dealer: Option<Seat>,
     roles: Option<HashMap<PlayerId, PlayerRole>>,
+    buttons: HashMap<PlayerId, PokerButton>,
     cur_log: Vec<TableViewDiff<PokerGlobalViewDiff<PlayerId>>>,
     old_logs: Vec<HandLog>,
     last_log_read: usize,
@@ -229,6 +230,7 @@ impl Table {
             rules,
             players: HashMap::new(),
             seats: BTreeMap::new(),
+            buttons: HashMap::new(),
             last_dealer: None,
             roles: None,
             old_logs: Vec::new(),
@@ -327,15 +329,32 @@ impl Table {
 
             state.rules.ante = (state.ante_rule)(round, state.server_uptime());
             println!("Got ante rule");
-            let new_min_bet = match &state.rules.ante {
-                AnteRule::Ante(ante) => *ante,
-                AnteRule::Blinds(blinds) => blinds.iter().map(|b| b.amount).max().unwrap(),
+            state.buttons.clear();
+            state.buttons.insert(roles.get(&0).cloned().unwrap(), PokerButton::Dealer);
+            let new_min_bet = match state.rules.ante.clone() {
+                AnteRule::Ante(ante) => ante,
+                AnteRule::Blinds(blinds) => {
+                    let max_blind = blinds.iter().map(|b| b.amount).max().unwrap();
+                    let mut blind_role = 0;
+
+                    if state.players.values().filter(|p| p.chips > 0).count() > 2 {
+                        blind_role = 1;
+                    }
+
+                    for Blind{amount} in blinds {
+                        state.buttons.insert(roles.get(&blind_role).cloned().unwrap(), if amount == max_blind {PokerButton::BigBlind} else {PokerButton::SmallBlind});
+                        blind_role = next_player(blind_role, roles.len());
+                    }
+
+                    max_blind
+                },
             };
             if new_min_bet != state.rules.min_bet {
                 state.rules.min_bet = new_min_bet;
                 let send_rules = state.rules.clone();
                 state.add_table_event(TableEvent::AnteChange{new_table_rules: send_rules});
             }
+            self.table_view_tx.send(self.viewstate(&state));
             state.rules.clone()
         };
         println!("Playing poker...");
@@ -425,6 +444,7 @@ impl Table {
         TableViewState {
             running,
             roles: state.roles.as_ref().map(|h| h.iter().map(|(p, &r)| (r, p.clone())).collect()),
+            buttons: state.buttons.clone(),
             seats: state.seats.iter().map(|(s, p)| (p.clone(), *s)).collect(),
             config: config.clone(),
             running_variant: state.running_variant.clone(),

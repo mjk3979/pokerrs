@@ -391,7 +391,7 @@ fn calc_winners(variant: &PokerVariant, state: &HandState, rules: &SpecialRules)
     }
 }
 
-fn next_player(current_role: PlayerRole, num_players: usize) -> PlayerRole {
+pub fn next_player(current_role: PlayerRole, num_players: usize) -> PlayerRole {
     let mut new_player = current_role+1;
     if new_player >= num_players {
         return 0;

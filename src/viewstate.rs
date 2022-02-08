@@ -20,6 +20,14 @@ pub enum CardViewState {
     Invisible
 }
 
+#[derive(Clone, Copy, Hash, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(TS)]
+pub enum PokerButton {
+    Dealer,
+    BigBlind,
+    SmallBlind,
+}
+
 impl CardViewState {
     pub fn from_card_state_and_same_player(state: &CardState, same_player: bool) -> CardViewState {
         use CardViewState::*;
@@ -66,6 +74,7 @@ pub struct PokerViewState {
 pub struct TableViewState {
     pub running: bool,
     pub roles: Option<HashMap<PlayerRole, PlayerId>>,
+    pub buttons: HashMap<PlayerId, PokerButton>,
     pub seats: HashMap<PlayerId, Seat>,
     pub config: TableConfig,
     pub running_variant: Option<PokerVariantDesc>,
