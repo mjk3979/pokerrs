@@ -244,17 +244,7 @@ pub fn best_hand(hand: CardTuple, community: CardTuple, hand_size: usize, rules:
             unwild.push(card);
         }
 
-        //let mut wild_combos = vec![all_cards.clone()];
-        let mut wild_combos = Vec::new();
-
-        for wilds in combinations_with_replacement(standard_deck().raw.iter(), num_wild) {
-            let mut wild_hand = unwild.clone();
-            for wild in wilds {
-                wild_hand.push(*wild)
-            }
-            wild_combos.push(wild_hand);
-        }
-        wild_combos.into_iter().filter_map(|wild_hand| {
+        wild_combinations(unwild, num_wild).into_iter().filter_map(|wild_hand| {
             aces_combos(wild_hand).into_iter().filter_map(|v|{
                 Some(HandStrength::new(v, hand_size))
             }).max()

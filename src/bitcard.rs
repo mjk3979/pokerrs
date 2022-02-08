@@ -44,7 +44,7 @@ pub struct CardSetIter {
 #[derive(Copy, Clone)]
 pub struct AcesCombos {
     non_aces: CardTuple,
-    ace_suits: u8,
+    aces: CardTuple,
     idx: u8,
 }
 
@@ -341,18 +341,17 @@ impl std::ops::Add for CardTuple {
 impl AcesCombos {
     pub fn new(cards: CardTuple) -> AcesCombos {
         let mut non_aces = CardTuple::new();
-        let mut ace_suits = 0;
+        let mut aces = CardTuple::new();
         for card in cards.iter() {
             if card.rank == 0 {
-                let Suit(suit) = card.suit;
-                ace_suits |= 1 << suit as u8;
+                aces.push(card);
             } else {
                 non_aces.push(card);
             }
         }
         AcesCombos {
             non_aces,
-            ace_suits,
+            aces,
             idx: 0
         }
     }
@@ -361,21 +360,15 @@ impl AcesCombos {
 impl Iterator for AcesCombos {
     type Item = CardTuple;
     fn next(&mut self) -> Option<CardTuple> {
-        while self.idx < 1 << 4 {
-            let to_flip = self.idx & self.ace_suits;
-            if to_flip != self.idx {
-                self.idx += 1;
-                continue;
-            }
+        while self.idx < 1 << self.aces.len() {
+            let to_flip = self.idx;
             self.idx += 1;
             let mut retval = self.non_aces;
-            for suit in 0..4 {
-                if (self.ace_suits & (1<<suit)) != 0 {
-                    if (to_flip & (1<<suit)) != 0 {
-                        retval.push(Card{rank:NUM_RANKS, suit:Suit(suit as usize)});
-                    } else {
-                        retval.push(Card{rank:0, suit:Suit(suit as usize)});
-                    }
+            for (idx, ace) in self.aces.iter().enumerate() {
+                if to_flip & (1 << idx) != 0 {
+                    retval.push(Card{rank: NUM_RANKS, suit: ace.suit});
+                } else {
+                    retval.push(Card{rank: 0, suit: ace.suit});
                 }
             }
             return Some(retval);
