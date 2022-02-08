@@ -128,7 +128,7 @@ pub enum JoinError {
 
 impl TableConfig {
     pub fn is_valid(&self) -> bool {
-        self.variant_selector.is_valid() && self.variant_selector.all().into_iter().all(|v| self.max_players < variant_max_players(&v, standard_deck().raw.len()))
+        self.variant_selector.is_valid() && self.variant_selector.all().into_iter().all(|v| self.max_players <= variant_max_players(&v, standard_deck().raw.len()))
     }
 }
 

@@ -96,6 +96,7 @@ pub enum Round {
     Replace {
         max_replace_fun: fn (&PlayerState) -> usize,
         max_possible_replace: usize,
+        extra_replace: usize,
     }
 }
 
@@ -262,7 +263,8 @@ pub fn five_card_draw() -> PokerVariant {
             },
             Replace {
                 max_replace_fun: three_or_four_with_ace,
-                max_possible_replace: 4,
+                max_possible_replace: 3,
+                extra_replace: 4,
             },
             Bet {
                 starting_player: 1
@@ -316,7 +318,10 @@ pub fn variant_max_players(variant: &PokerVariant, num_cards: usize) -> usize {
         match round {
             DrawToHand{facing} => per_player += facing.len(),
             DrawToCommunity{quant} => community += quant,
-            Replace{max_possible_replace, ..} => per_player += max_possible_replace,
+            Replace{max_possible_replace, extra_replace, ..} => {
+                per_player += max_possible_replace;
+                community += extra_replace;
+            },
             _ => {}
         }
     }
