@@ -265,14 +265,19 @@ function draw_players(player_id: string, viewstate: PokerViewState | null, table
 function draw_dealers_choice_special_cards(groups: SpecialCardGroupDesc[]) {
     const special_cards_choice_list = <HTMLElement>document.getElementById("special_cards_choice_list");
     special_cards_choice_list.innerHTML = "";
+    if (groups.length <= 0) {
+        special_cards_choice_list.classList.add("hidden");
+    } else {
+        special_cards_choice_list.classList.remove("hidden");
+    }
     for (const group of groups) {
         const div = document.createElement("div");
         const label = document.createElement("label");
         const radio = document.createElement("input");
         radio.classList.add("special_cards_choice");
         radio.setAttribute("type", "checkbox");
-        label.innerHTML = group.name;
         label.appendChild(radio);
+        label.innerHTML += ` ${group.name}`;
         div.appendChild(label);
         special_cards_choice_list.appendChild(div);
     }
@@ -347,17 +352,20 @@ function draw_action(action: ServerActionRequest | null, viewstate: PokerViewSta
         for (let vidx = 0; vidx < action.data.variants.length; vidx += 1) {
             const desc = action.data.variants[vidx];
             const label = document.createElement("label");
+            label.classList.add("dealers_choice_label");
             const button = document.createElement("input");
             button.setAttribute("type", "radio");
             button.setAttribute("name", "dealers_choice_button");
             button.classList.add("dealers_choice_button");
-            label.innerHTML = desc.name;
             const cidx = vidx;
-            button.addEventListener('click', () => {
+            button.addEventListener('change', () => {
                 const desc = action.data.variants[cidx];
                 draw_dealers_choice_special_cards(desc.special_cards);
             });
             label.appendChild(button);
+            const labelSpan = document.createElement("span");
+            labelSpan.innerHTML = desc.name;
+            label.appendChild(labelSpan);
             dealers_choice_list.appendChild(label);
         }
         draw_dealers_choice_special_cards([]);
@@ -696,6 +704,9 @@ function draw_settings_variants() {
         }
         seen.push(name);
         const div = document.createElement("div");
+        div.style.width = "100%";
+        div.style.alignItems = "center";
+        div.classList.add("smallgap");
 
         const delete_button = document.createElement("input");
         delete_button.setAttribute("type", "button");
@@ -714,20 +725,28 @@ function draw_settings_variants() {
 
         let special_card_idx = 0;
         for (const should_check of special_cards) {
+            const captured_card_idx = special_card_idx;
+
+            const labelDiv = document.createElement("div");
+            labelDiv.classList.add("centered_vlist");
+            labelDiv.style.flex = "1 0 fit-content";
             const label = document.createElement("label");
             const checkbox = document.createElement("input");
+            const name = `special_card_settings_${captured_idx}_${captured_card_idx}`;
+            label.setAttribute("for", name);
             checkbox.setAttribute("type", "checkbox");
             checkbox.classList.add("special_card_settings_checkbox");
+            checkbox.setAttribute("name", name);
             if (should_check) {
                 checkbox.setAttribute("checked", "");
             }
-            const captured_card_idx = special_card_idx;
             checkbox.addEventListener('change', () => {
                 included_variants[captured_idx][1][captured_card_idx] = checkbox.checked;
             });
             label.innerHTML = special_card_names[special_card_idx];
-            label.appendChild(checkbox);
-            div.appendChild(label);
+            labelDiv.appendChild(checkbox);
+            labelDiv.appendChild(label);
+            div.appendChild(labelDiv);
             special_card_idx += 1;
         }
 

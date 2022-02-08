@@ -76,9 +76,9 @@
     <div id="dealers_choice_modal" class="modal_container center hidden">
         <div class="vlist modal">
             <span class="large_label">Select next round's game</span>
-            <div id="dealers_choice_list" style="width: 100%" class="vlist">
+            <div id="dealers_choice_list" style="width: 100%; padding-bottom: 1em;" class="vlist">
             </div>
-            <div id="special_cards_choice_list" id="lalign">
+            <div id="special_cards_choice_list" class="hidden vlist">
             </div>
             <input type="button" id="dealers_choice_submit" value="Submit Choice" />
         </div>
@@ -97,7 +97,7 @@
                 </label>
                 <input name="starting_chips_input" id="starting_chips_input" type="number" min="1" value="1000" />
             </div>
-            <div class="vlist">
+            <div class="vlist" style="width: 100%;">
                 <div class="marth biggap hfill">
                     <label>
                         Ante
@@ -152,11 +152,11 @@
             </div>
             <div class="vlist">
                 <span class="settings_label">All Variants (Click to add)</span>
-                <div>
+                <div class="smallgap">
                     ${ALL_VARIANTS}
                 </div>
                 <span class="settings_label">Included Variants</span>
-                <div class="vlist" id="included_variant_list">
+                <div class="vlist" style="width: 100%;" id="included_variant_list">
                 </div>
             </div>
             <div class="ralign">

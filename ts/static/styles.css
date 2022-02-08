@@ -201,6 +201,10 @@ html, body {
     gap: 3em;
 }
 
+.smallgap {
+    gap: 0.5em;
+}
+
 .deselected {
     border-style: solid;
     border-color: #35654D;
@@ -220,7 +224,7 @@ html, body {
     padding: 0;
 }
 
-.dealers_choice_button {
+.dealers_choice_label {
     width: 100%;
     font-size: 1.25em;
 }
@@ -257,4 +261,8 @@ html, body {
 
 .variant_list {
     width: 10em;
+}
+
+.variant_span {
+    flex: 2 0 fit-content;
 }
