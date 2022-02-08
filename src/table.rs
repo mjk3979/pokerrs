@@ -256,11 +256,11 @@ impl Table {
         }
     }
 
-    async fn get_next_variant(&self) -> (PokerVariant, PokerVariantDesc, SpecialRules) {
+    async fn get_next_variant(&self, roles: &HashMap<PlayerRole, PlayerId>) -> (PokerVariant, PokerVariantDesc, SpecialRules) {
         let (variant_state, dealer) = {
             let state = self.state.lock().unwrap();
             let variant_state = state.variant_state.clone();
-            (variant_state, state.players.get(&state.next_round_roles().get(&0).unwrap().1).unwrap().clone())
+            (variant_state, state.players.get(roles.get(&0).unwrap()).unwrap().clone())
         };
         match variant_state {
             PokerVariantState::Rotation{variants, mut idx} => {
@@ -315,7 +315,7 @@ impl Table {
             deck.secure_shuffle(&mut rng);
         }
         println!("Getting variant");
-        let (variant, variant_desc, special_cards) = self.get_next_variant().await;
+        let (variant, variant_desc, special_cards) = self.get_next_variant(&roles).await;
         let rules = {
             println!("Got variant");
             let mut state = self.state.lock().unwrap();
